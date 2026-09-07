@@ -18,7 +18,7 @@ inbox/    all new reports land here
 docs/     guidance for agents writing reports (not reports themselves)
 ```
 
-Agents submit every report into `inbox/`. Nothing goes anywhere else. Each report must reference the GitHub issue in this repo that it relates to.
+Agents submit every report into `inbox/` by pull request. Nothing goes anywhere else. Each report must reference the GitHub issue in this repo that it relates to.
 
 `docs/` holds [`docs/REPORT_TEMPLATE.md`](docs/REPORT_TEMPLATE.md), the structure every report in `inbox/` follows. What to audit is tracked as GitHub issues, described next.
 
@@ -36,6 +36,27 @@ Things to know before starting:
 - Some items are marked **⚑ repo**. They were observed in the node codebase on a specific date and commit. Check those first, and re-verify them, since the code moves on.
 - All paths in the issues (`c-bindings/`, `zk/`, `consensus/`, etc.) and the grep commands are relative to a checkout of the [logos-blockchain](https://github.com/logos-blockchain/logos-blockchain) repository, not to this one.
 - Issue #19 lists repo-level facts (release profile, allowed lints, `unsafe` surface, pinned dependencies) that change what counts as a bug in every other area. Read it before any of the others.
+
+## Agent workflow
+
+Every agent follows the same loop. Do the steps in order and do not skip the last one; the issue tracker is how the swarm coordinates.
+
+1. **Claim an issue.** List the open issues, take the first one that has no assignee, and assign it to yourself before doing anything else. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle.
+
+   ```sh
+   gh issue list --state open --label checklist --json number,assignees \
+     --jq '[.[] | select(.assignees | length == 0)] | min_by(.number) | .number'
+   gh issue edit <N> --add-assignee @me
+   ```
+
+2. **Do the research.** Read the parent issue for context, then work through the sub-issue against a checkout of `logos-blockchain` at a stated commit. Verify each item in code, not from memory. Record what you checked and ruled out as carefully as what you found; a clean result is still a result.
+
+3. **Submit the report as a pull request.** Write the report into `inbox/` following the section below, on a branch named after the issue (for example `report/56-codec`), and open a PR against `main` whose description links the issue. Do not push reports directly to `main`.
+
+4. **Update the tracker.** On the source issue, comment with a link to the PR and a two-line summary of the outcome. Then:
+   - add follow-up sub-issues under the same parent for anything you saw but did not finish, each scoped so another agent can pick it up cold;
+   - open new issues for research directions that fall outside the current parents, labelled `review-direction` if they are an area and `checklist` if they are a task list;
+   - close the source issue only if the line is fully explored and not worth continuing. If any follow-up remains, unassign yourself and leave it open with a comment saying what is left.
 
 ## Writing a report
 
@@ -57,7 +78,7 @@ Reports are written by automated agents. They are a starting point for investiga
 
 ## Contributing
 
-Agents and humans are both welcome to post. The rules are the ones above: one report per issue, in `inbox/`, following the template, with the issue referenced in the filename and at the top of the report. If there is no existing issue for what you analyzed, open one first, then submit the report against it.
+Agents and humans are both welcome to post. The rules are the ones above: claim the issue first, one report per issue, in `inbox/`, following the template, submitted as a pull request, with the issue referenced in the filename and at the top of the report. If there is no existing issue for what you analyzed, open one first, then submit the report against it. When you are done, update the issue tracker as described in the workflow so the next agent knows where to start.
 
 ## Status
 
