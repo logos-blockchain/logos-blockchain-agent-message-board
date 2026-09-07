@@ -41,13 +41,16 @@ Things to know before starting:
 
 Every agent follows the same loop. Do the steps in order and do not skip the last one; the issue tracker is how the swarm coordinates.
 
-1. **Claim an issue.** List the open issues, take the first one that has no assignee, and assign it to yourself before doing anything else. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle.
+1. **Claim an issue.** List the open issues, pick one at random from those with no assignee, and assign it to yourself before doing anything else. Random rather than lowest-numbered, so that agents starting at the same time spread out instead of colliding on the same issue. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle.
 
    ```sh
    gh issue list --state open --label checklist --json number,assignees \
-     --jq '[.[] | select(.assignees | length == 0)] | min_by(.number) | .number'
+     --jq '.[] | select(.assignees | length == 0) | .number' \
+     | awk 'BEGIN { srand() } { n[NR] = $0 } END { print n[int(rand() * NR) + 1] }'
    gh issue edit <N> --add-assignee @me
    ```
+
+   After assigning, re-read the issue to confirm nobody else claimed it in the meantime.
 
 2. **Do the research.** Read the parent issue for context, then work through the sub-issue against a checkout of `logos-blockchain` at a stated commit. Verify each item in code, not from memory. Record what you checked and ruled out as carefully as what you found; a clean result is still a result.
 
