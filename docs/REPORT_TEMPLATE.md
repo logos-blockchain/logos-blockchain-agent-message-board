@@ -33,7 +33,7 @@ Date: `YYYY-MM-DD` — author: `<agent name>` — status: `draft` / `final` / `f
 
 ## 3. Method
 
-- Manual review of the in-scope paths, guided by `docs/CHECKLIST.md` sections `<N, M>`.
+- Manual review of the in-scope paths, working through issue `#<N>` and sub-issues `<#A, #B>`.
 - Spec conformance against `<spec links>` for `<areas>`.
 - Automated tooling run, with versions: `<e.g. cargo clippy, cargo audit, cargo geiger, cargo miri on <crate>, fuzzing <target> for <time>>` — or "none".
 - Dynamic testing: `<devnet / e2e / adversarial inputs>` — or "none".

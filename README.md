@@ -20,47 +20,32 @@ docs/     guidance for agents writing reports (not reports themselves)
 
 Agents submit every report into `inbox/`. Nothing goes anywhere else. Each report must reference the GitHub issue in this repo that it relates to.
 
-`docs/` holds the two documents every audit is built from:
+`docs/` holds [`docs/REPORT_TEMPLATE.md`](docs/REPORT_TEMPLATE.md), the structure every report in `inbox/` follows. What to audit is tracked as GitHub issues, described next.
 
-- [`docs/CHECKLIST.md`](docs/CHECKLIST.md) — what to look for when auditing the [logos-blockchain](https://github.com/logos-blockchain/logos-blockchain) node.
-- [`docs/REPORT_TEMPLATE.md`](docs/REPORT_TEMPLATE.md) — the structure every report in `inbox/` follows.
+## The review issues
 
-## The checklist
+Everything to look for when auditing the [logos-blockchain](https://github.com/logos-blockchain/logos-blockchain) node is tracked in this repo's [issues](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues). They are organised in two levels:
 
-[`docs/CHECKLIST.md`](docs/CHECKLIST.md) is a security review checklist for the node, organised by area. Each item is a question the reviewer answers with a finding, a "verified OK" note, or "not in scope". Its sections are:
+- **Parent issues**, labelled `review-direction`, one per area of the node: consensus, sync, ledger, SDP, mempool, codec, networking, blend, storage, ZK, KMS, API and FFI, cryptography, wallet, configuration, supply chain, testing, and workspace-wide Rust sweeps. Each states the area, the files to look at, the questions to answer, and the deliverable.
+- **Sub-issues**, labelled `checklist`, attached to a parent. Each is a short task list of specific things to verify in that area. They came from a review checklist that was converted into issues; the original file is in the git history if you want the one-page view.
 
-| Section | Area |
-|---|---|
-| 0 | Repo-level facts to carry into every section (release profile, allowed lints, `unsafe` surface, pinned deps) |
-| 1 | Consensus — Cryptarchia (slots, leader election, fork choice, sync, time, finality) |
-| 2 | Ledger and state transition (notes, mantle ops, SDP, reorgs, codec, Merkle/MMR) |
-| 3 | Zero-knowledge (circuit side and node-side integration) |
-| 4 | Cryptography and key management |
-| 5 | Blend — mixnet and privacy |
-| 6 | P2P networking |
-| 7 | Mempool, leader and PoW |
-| 8 | Storage |
-| 9 | HTTP API, wallet and FFI |
-| 10 | Rust-specific review items (arithmetic, panics, `unsafe`, deserialisation, async, determinism, dependencies) |
-| 11 | Configuration, genesis and deployment |
-| 12 | Testing and verification |
-| — | Quick grep starters: `rg` commands for the most common patterns |
+Start from a parent issue to understand the area, then work through its sub-issues. A report may answer a parent, a single sub-issue, or several sub-issues of one parent, but it must say which.
 
-Things to know before using it:
+Things to know before starting:
 
-- Items marked **⚑ repo** were observed in the node codebase on the date stated at the top of the checklist. Check those first, and re-verify them, since the code moves on.
-- All paths in the checklist (`c-bindings/`, `zk/`, `consensus/`, etc.) and the grep commands are relative to a checkout of the [logos-blockchain](https://github.com/logos-blockchain/logos-blockchain) repository, not to this one.
-- An audit does not have to cover the whole checklist. Pick the sections that match the issue being audited and say which ones you used in the report's Method section.
+- Some items are marked **⚑ repo**. They were observed in the node codebase on a specific date and commit. Check those first, and re-verify them, since the code moves on.
+- All paths in the issues (`c-bindings/`, `zk/`, `consensus/`, etc.) and the grep commands are relative to a checkout of the [logos-blockchain](https://github.com/logos-blockchain/logos-blockchain) repository, not to this one.
+- Issue #19 lists repo-level facts (release profile, allowed lints, `unsafe` surface, pinned dependencies) that change what counts as a bug in every other area. Read it before any of the others.
 
 ## Writing a report
 
 Every report in `inbox/` follows [`docs/REPORT_TEMPLATE.md`](docs/REPORT_TEMPLATE.md). To write one:
 
-1. Find or open the GitHub issue in this repo that the audit relates to. One report per issue.
+1. Pick the GitHub issue in this repo that the audit relates to, or open one if none fits. One report per issue.
 2. Copy the template into `inbox/` and name the file after the issue, for example `inbox/42-consensus-timeout-audit.md` for issue #42.
 3. Fill in the header: the issue link, the exact `logos-blockchain` commit audited, the component(s), the date, and the author.
 4. Fill in **Scope** honestly. Anything not listed as in scope is assumed unreviewed. Name the third-party crates you assumed correct.
-5. In **Method**, list the checklist sections you worked through and any tooling you ran, with versions.
+5. In **Method**, list the issues and sub-issues you worked through and any tooling you ran, with versions.
 6. Record each finding as an `LB-NNN` block with severity, difficulty, category, and a `file:line` target in the node repository, so it can be reproduced. Rate using the definitions in the template's Appendix A; do not invent new scales. Non-security observations go under **Suggestions** as `S-NNN`.
 7. Delete the `>` guidance blocks and any sections you left empty, then write the Summary last.
 
