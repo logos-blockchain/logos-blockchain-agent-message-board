@@ -1,0 +1,2633 @@
+diff --git a/c-bindings/src/api/blend.rs b/c-bindings/src/api/blend.rs
+index 1511a7dea..f0bf84b99 100644
+--- a/c-bindings/src/api/blend.rs
++++ b/c-bindings/src/api/blend.rs
+@@ -81,31 +81,33 @@ pub unsafe extern "C" fn blend_join_as_core_node(
+     locator: *const c_char,
+     service_note_id: *const u8,
+ ) -> FfiStatusResult<DeclarationId> {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(locator);
+-    return_error_if_null_pointer!(service_note_id);
+-
+-    let locator = unwrap_or_return_error!(unsafe { parse_locator(locator) });
+-    let service_note_id =
+-        unwrap_or_return_error!(unsafe { parse_service_note_id(service_note_id) });
+-
+-    let node = unsafe { &*node };
+-
+-    let result: StatusResult<sdp::DeclarationId> = node.get_runtime_handle().block_on(async {
+-        lb_api_service::http::blend::blend_join_network::<
+-            BlendService<RuntimeServiceId>,
+-            RuntimeServiceId,
+-        >(node.get_overwatch_handle(), locator, service_note_id)
+-        .await
+-        .map_err(|error| {
+-            OperationStatus::error(
+-                OperationStatusCode::RelayError,
+-                format!("Failed to join blend network: {error}"),
+-            )
+-        })
+-    });
+-
+-    result.map(DeclarationId::from).into()
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(locator);
++        return_error_if_null_pointer!(service_note_id);
++
++        let locator = unwrap_or_return_error!(unsafe { parse_locator(locator) });
++        let service_note_id =
++            unwrap_or_return_error!(unsafe { parse_service_note_id(service_note_id) });
++
++        let node = unsafe { &*node };
++
++        let result: StatusResult<sdp::DeclarationId> = node.get_runtime_handle().block_on(async {
++            lb_api_service::http::blend::blend_join_network::<
++                BlendService<RuntimeServiceId>,
++                RuntimeServiceId,
++            >(node.get_overwatch_handle(), locator, service_note_id)
++            .await
++            .map_err(|error| {
++                OperationStatus::error(
++                    OperationStatusCode::RelayError,
++                    format!("Failed to join blend network: {error}"),
++                )
++            })
++        });
++
++        result.map(DeclarationId::from).into()
++    })
+ }
+ 
+ /// Gets the current Blend network information.
+@@ -166,24 +168,26 @@ pub type FfiBlendInfoResult = FfiStatusResult<*mut c_char>;
+ #[must_use]
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn blend_info(node: *const LogosBlockchainNode) -> FfiBlendInfoResult {
+-    return_error_if_null_pointer!(node);
+-
+-    let node = unsafe { &*node };
+-    let network_info = unwrap_or_return_error!(blend_info_sync(node));
+-
+-    let json_network_info =
+-        unwrap_or_return_error!(serde_json::to_string(&network_info).map_err(|error| {
+-            OperationStatus::error(
+-                OperationStatusCode::RuntimeError,
+-                format!("Failed to serialize blend info: {error}"),
+-            )
+-        }));
+-    let json_network_info_c =
+-        unwrap_or_return_error!(CString::new(json_network_info).map_err(|error| {
+-            OperationStatus::error(
+-                OperationStatusCode::RuntimeError,
+-                format!("Failed to create CString: {error}"),
+-            )
+-        }));
+-    FfiBlendInfoResult::ok(json_network_info_c.into_raw())
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++
++        let node = unsafe { &*node };
++        let network_info = unwrap_or_return_error!(blend_info_sync(node));
++
++        let json_network_info =
++            unwrap_or_return_error!(serde_json::to_string(&network_info).map_err(|error| {
++                OperationStatus::error(
++                    OperationStatusCode::RuntimeError,
++                    format!("Failed to serialize blend info: {error}"),
++                )
++            }));
++        let json_network_info_c =
++            unwrap_or_return_error!(CString::new(json_network_info).map_err(|error| {
++                OperationStatus::error(
++                    OperationStatusCode::RuntimeError,
++                    format!("Failed to create CString: {error}"),
++                )
++            }));
++        FfiBlendInfoResult::ok(json_network_info_c.into_raw())
++    })
+ }
+diff --git a/c-bindings/src/api/chain.rs b/c-bindings/src/api/chain.rs
+index 3954e3a8c..71f69ad5a 100644
+--- a/c-bindings/src/api/chain.rs
++++ b/c-bindings/src/api/chain.rs
+@@ -39,24 +39,26 @@ pub type FfiGetChainIdResult = FfiStatusResult<*mut c_char>;
+ #[must_use]
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn get_chain_id(node: *const LogosBlockchainNode) -> FfiGetChainIdResult {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
+ 
+-    let Some(chain_id) = node.chain_id() else {
+-        return FfiGetChainIdResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "The chain ID of this deployment cannot be represented as a C string.",
+-        ));
+-    };
++        let Some(chain_id) = node.chain_id() else {
++            return FfiGetChainIdResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                "The chain ID of this deployment cannot be represented as a C string.",
++            ));
++        };
+ 
+-    // Hand the caller its own copy: the node keeps ownership of its own string
+-    // for as long as it lives, and the caller frees this one with
+-    // `free_cstring`.
+-    match CString::new(chain_id.to_bytes()) {
+-        Ok(chain_id) => FfiGetChainIdResult::ok(chain_id.into_raw()),
+-        Err(error) => FfiGetChainIdResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            format!("Failed to create CString: {error}"),
+-        )),
+-    }
++        // Hand the caller its own copy: the node keeps ownership of its own string
++        // for as long as it lives, and the caller frees this one with
++        // `free_cstring`.
++        match CString::new(chain_id.to_bytes()) {
++            Ok(chain_id) => FfiGetChainIdResult::ok(chain_id.into_raw()),
++            Err(error) => FfiGetChainIdResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                format!("Failed to create CString: {error}"),
++            )),
++        }
++    })
+ }
+diff --git a/c-bindings/src/api/channel.rs b/c-bindings/src/api/channel.rs
+index 52d00fe00..67650838f 100644
+--- a/c-bindings/src/api/channel.rs
++++ b/c-bindings/src/api/channel.rs
+@@ -101,21 +101,23 @@ pub unsafe extern "C" fn get_channel_state(
+     node: *const LogosBlockchainNode,
+     channel_id: *const u8,
+ ) -> FfiGetChannelStateResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(channel_id);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(channel_id);
+ 
+-    let channel_id = {
+-        let bytes = unsafe { std::slice::from_raw_parts(channel_id, 32) };
+-        let Ok(array): Result<[u8; 32], _> = bytes.try_into() else {
+-            return FfiGetChannelStateResult::err(OperationStatus::error(
+-                OperationStatusCode::RuntimeError,
+-                "Invalid channel_id length.",
+-            ));
++        let channel_id = {
++            let bytes = unsafe { std::slice::from_raw_parts(channel_id, 32) };
++            let Ok(array): Result<[u8; 32], _> = bytes.try_into() else {
++                return FfiGetChannelStateResult::err(OperationStatus::error(
++                    OperationStatusCode::RuntimeError,
++                    "Invalid channel_id length.",
++                ));
++            };
++            ChannelId::from(array)
+         };
+-        ChannelId::from(array)
+-    };
+ 
+-    let node = unsafe { &*node };
+-    let json_cstring = unwrap_or_return_error!(get_channel_state_sync(node, channel_id));
+-    FfiGetChannelStateResult::ok(json_cstring.into_raw())
++        let node = unsafe { &*node };
++        let json_cstring = unwrap_or_return_error!(get_channel_state_sync(node, channel_id));
++        FfiGetChannelStateResult::ok(json_cstring.into_raw())
++    })
+ }
+diff --git a/c-bindings/src/api/config.rs b/c-bindings/src/api/config.rs
+index 444679ac1..a84902d43 100644
+--- a/c-bindings/src/api/config.rs
++++ b/c-bindings/src/api/config.rs
+@@ -140,7 +140,15 @@ impl From<GenerateConfigArgs> for EmbeddedInitArgs {
+ #[must_use]
+ pub fn generate_config_sync(args: EmbeddedInitArgs) -> OperationStatus {
+     let init_args: InitArgs = args.into();
+-    let runtime = Runtime::new().expect("Failed to create Tokio runtime.");
++    let runtime = match Runtime::new() {
++        Ok(runtime) => runtime,
++        Err(error) => {
++            return OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                format!("Could not create the Tokio runtime: {error}"),
++            );
++        }
++    };
+     let run_result = runtime.block_on(async move { lb_node::cli::config::init::run(init_args) });
+     match run_result {
+         Ok(()) => OperationStatus::OK,
+@@ -169,8 +177,10 @@ pub fn generate_config_sync(args: EmbeddedInitArgs) -> OperationStatus {
+ #[must_use]
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn generate_user_config(args: GenerateConfigArgs) -> OperationStatus {
+-    let init_args = EmbeddedInitArgs::from(args);
+-    generate_config_sync(init_args)
++    crate::macros::catch_panics(|| {
++        let init_args = EmbeddedInitArgs::from(args);
++        generate_config_sync(init_args)
++    })
+ }
+ 
+ /// Updates an existing user config file with keys from a keystore file,
+@@ -196,22 +206,24 @@ pub unsafe extern "C" fn update_user_config(
+     user_config_path: *const c_char,
+     keystore_path: *const c_char,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(user_config_path);
+-    return_error_if_null_pointer!(keystore_path);
+-
+-    let args = UpdateArgs::new(
+-        unsafe { cstr_to_path(user_config_path) },
+-        unsafe { cstr_to_path(keystore_path) },
+-        true,
+-    );
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(user_config_path);
++        return_error_if_null_pointer!(keystore_path);
++
++        let args = UpdateArgs::new(
++            unsafe { cstr_to_path(user_config_path) },
++            unsafe { cstr_to_path(keystore_path) },
++            true,
++        );
+ 
+-    match lb_node::cli::config::update::run(args) {
+-        Ok(()) => OperationStatus::OK,
+-        Err(error) => OperationStatus::error(
+-            OperationStatusCode::ConfigurationError,
+-            format!("Error updating config: {error:?}"),
+-        ),
+-    }
++        match lb_node::cli::config::update::run(args) {
++            Ok(()) => OperationStatus::OK,
++            Err(error) => OperationStatus::error(
++                OperationStatusCode::ConfigurationError,
++                format!("Error updating config: {error:?}"),
++            ),
++        }
++    })
+ }
+ 
+ /// Generates a new user config file from an existing keystore file,
+@@ -237,20 +249,22 @@ pub unsafe extern "C" fn migrate_user_config(
+     output_path: *const c_char,
+     keystore_path: *const c_char,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(output_path);
+-    return_error_if_null_pointer!(keystore_path);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(output_path);
++        return_error_if_null_pointer!(keystore_path);
+ 
+-    let args = MigrateArgs::new(unsafe { cstr_to_path(output_path) }, unsafe {
+-        cstr_to_path(keystore_path)
+-    });
++        let args = MigrateArgs::new(unsafe { cstr_to_path(output_path) }, unsafe {
++            cstr_to_path(keystore_path)
++        });
+ 
+-    match lb_node::cli::config::migrate::run(args) {
+-        Ok(()) => OperationStatus::OK,
+-        Err(error) => OperationStatus::error(
+-            OperationStatusCode::ConfigurationError,
+-            format!("Error migrating config: {error:?}"),
+-        ),
+-    }
++        match lb_node::cli::config::migrate::run(args) {
++            Ok(()) => OperationStatus::OK,
++            Err(error) => OperationStatus::error(
++                OperationStatusCode::ConfigurationError,
++                format!("Error migrating config: {error:?}"),
++            ),
++        }
++    })
+ }
+ 
+ /// Migrates a 0.1.2 config file to a new user config and keystore, equivalent
+@@ -279,23 +293,25 @@ pub unsafe extern "C" fn migrate_user_config_0_1_2(
+     old_config_path: *const c_char,
+     keystore_path: *const c_char,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(new_config_path);
+-    return_error_if_null_pointer!(old_config_path);
+-    return_error_if_null_pointer!(keystore_path);
+-
+-    let args = lb_node::cli::config::migrate_0_1_2::MigrateArgs::new(
+-        unsafe { cstr_to_path(new_config_path) },
+-        unsafe { cstr_to_path(old_config_path) },
+-        unsafe { cstr_to_path(keystore_path) },
+-    );
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(new_config_path);
++        return_error_if_null_pointer!(old_config_path);
++        return_error_if_null_pointer!(keystore_path);
++
++        let args = lb_node::cli::config::migrate_0_1_2::MigrateArgs::new(
++            unsafe { cstr_to_path(new_config_path) },
++            unsafe { cstr_to_path(old_config_path) },
++            unsafe { cstr_to_path(keystore_path) },
++        );
+ 
+-    match lb_node::cli::config::migrate_0_1_2::run(args) {
+-        Ok(()) => OperationStatus::OK,
+-        Err(error) => OperationStatus::error(
+-            OperationStatusCode::ConfigurationError,
+-            format!("Error migrating config: {error:?}"),
+-        ),
+-    }
++        match lb_node::cli::config::migrate_0_1_2::run(args) {
++            Ok(()) => OperationStatus::OK,
++            Err(error) => OperationStatus::error(
++                OperationStatusCode::ConfigurationError,
++                format!("Error migrating config: {error:?}"),
++            ),
++        }
++    })
+ }
+ 
+ /// Generates `participation_data.yaml` from a user config and keystore,
+@@ -325,39 +341,41 @@ pub unsafe extern "C" fn participate(
+     output_dir: *const c_char,
+     external_address: *const c_char,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(config_path);
+-    return_error_if_null_pointer!(keystore_path);
+-    return_error_if_null_pointer!(output_dir);
+-
+-    let external_address = if external_address.is_null() {
+-        None
+-    } else {
+-        let address = unsafe { CStr::from_ptr(external_address) }.to_string_lossy();
+-        match address.parse::<Ipv4Addr>() {
+-            Ok(address) => Some(address),
+-            Err(error) => {
+-                return OperationStatus::error(
+-                    OperationStatusCode::ValidationError,
+-                    format!("Invalid external address '{address}': {error}"),
+-                );
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(config_path);
++        return_error_if_null_pointer!(keystore_path);
++        return_error_if_null_pointer!(output_dir);
++
++        let external_address = if external_address.is_null() {
++            None
++        } else {
++            let address = unsafe { CStr::from_ptr(external_address) }.to_string_lossy();
++            match address.parse::<Ipv4Addr>() {
++                Ok(address) => Some(address),
++                Err(error) => {
++                    return OperationStatus::error(
++                        OperationStatusCode::ValidationError,
++                        format!("Invalid external address '{address}': {error}"),
++                    );
++                }
+             }
+-        }
+-    };
++        };
+ 
+-    let args = ParticipateArgs {
+-        config: unsafe { cstr_to_path(config_path) },
+-        keystore: unsafe { cstr_to_path(keystore_path) },
+-        output: unsafe { cstr_to_path(output_dir) },
+-        external_address,
+-    };
++        let args = ParticipateArgs {
++            config: unsafe { cstr_to_path(config_path) },
++            keystore: unsafe { cstr_to_path(keystore_path) },
++            output: unsafe { cstr_to_path(output_dir) },
++            external_address,
++        };
+ 
+-    match lb_node::cli::participate::run(&args) {
+-        Ok(()) => OperationStatus::OK,
+-        Err(error) => OperationStatus::error(
+-            OperationStatusCode::ConfigurationError,
+-            format!("Error generating participation data: {error:?}"),
+-        ),
+-    }
++        match lb_node::cli::participate::run(&args) {
++            Ok(()) => OperationStatus::OK,
++            Err(error) => OperationStatus::error(
++                OperationStatusCode::ConfigurationError,
++                format!("Error generating participation data: {error:?}"),
++            ),
++        }
++    })
+ }
+ 
+ #[cfg(test)]
+diff --git a/c-bindings/src/api/cryptarchia.rs b/c-bindings/src/api/cryptarchia.rs
+index 590660bfd..24ed50c3d 100644
+--- a/c-bindings/src/api/cryptarchia.rs
++++ b/c-bindings/src/api/cryptarchia.rs
+@@ -141,12 +141,14 @@ pub type FfiCryptarchiaInfoResult = FfiStatusResult<*mut CryptarchiaInfo>;
+ pub unsafe extern "C" fn get_cryptarchia_info(
+     node: *const LogosBlockchainNode,
+ ) -> FfiCryptarchiaInfoResult {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
+-    let service_info = unwrap_or_return_error!(get_cryptarchia_info_sync(node));
+-    let c_info = CryptarchiaInfo::from(service_info);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
++        let service_info = unwrap_or_return_error!(get_cryptarchia_info_sync(node));
++        let c_info = CryptarchiaInfo::from(service_info);
+ 
+-    FfiCryptarchiaInfoResult::from_value(c_info)
++        FfiCryptarchiaInfoResult::from_value(c_info)
++    })
+ }
+ 
+ /// Frees the memory allocated for a [`CryptarchiaInfo`] struct.
+@@ -156,7 +158,7 @@ pub unsafe extern "C" fn get_cryptarchia_info(
+ /// - `pointer`: A pointer to the [`CryptarchiaInfo`] struct to be freed.
+ #[unsafe(no_mangle)]
+ pub extern "C" fn free_cryptarchia_info(pointer: *mut CryptarchiaInfo) -> OperationStatus {
+-    free::<CryptarchiaInfo>(pointer)
++    crate::macros::catch_panics(|| free::<CryptarchiaInfo>(pointer))
+ }
+ 
+ /// Gets a block's events as a JSON string.
+@@ -265,11 +267,13 @@ pub unsafe extern "C" fn get_block_events(
+     node: *const LogosBlockchainNode,
+     header_id: *const HeaderId,
+ ) -> FfiGetBlockEventsResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(header_id);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(header_id);
+ 
+-    let header_id = unsafe { *header_id };
+-    let node = unsafe { &*node };
+-    let json_cstring = unwrap_or_return_error!(get_block_events_sync(node, header_id));
+-    FfiGetBlockEventsResult::ok(json_cstring.into_raw())
++        let header_id = unsafe { *header_id };
++        let node = unsafe { &*node };
++        let json_cstring = unwrap_or_return_error!(get_block_events_sync(node, header_id));
++        FfiGetBlockEventsResult::ok(json_cstring.into_raw())
++    })
+ }
+diff --git a/c-bindings/src/api/keys.rs b/c-bindings/src/api/keys.rs
+index 943365d58..bbd22697c 100644
+--- a/c-bindings/src/api/keys.rs
++++ b/c-bindings/src/api/keys.rs
+@@ -77,34 +77,36 @@ pub unsafe extern "C" fn generate_key(
+     key_type: KeyType,
+     key_title: *const c_char,
+ ) -> FfiGenerateKeyResult {
+-    return_error_if_null_pointer!(user_config_path);
+-    return_error_if_null_pointer!(keystore_path);
+-
+-    let args = GenerateKeyArgs::new(
+-        unsafe { cstr_to_path(user_config_path) },
+-        unsafe { cstr_to_path(keystore_path) },
+-        key_type.into(),
+-        unsafe { key_title_from_ptr(key_title) },
+-        true,
+-    );
+-
+-    let key_id = match lb_node::cli::keys::generate_key(args) {
+-        Ok(key_id) => key_id,
+-        Err(error) => {
+-            return FfiGenerateKeyResult::err(OperationStatus::error(
+-                OperationStatusCode::ConfigurationError,
+-                format!("Error generating key: {error:?}"),
+-            ));
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(user_config_path);
++        return_error_if_null_pointer!(keystore_path);
++
++        let args = GenerateKeyArgs::new(
++            unsafe { cstr_to_path(user_config_path) },
++            unsafe { cstr_to_path(keystore_path) },
++            key_type.into(),
++            unsafe { key_title_from_ptr(key_title) },
++            true,
++        );
++
++        let key_id = match lb_node::cli::keys::generate_key(args) {
++            Ok(key_id) => key_id,
++            Err(error) => {
++                return FfiGenerateKeyResult::err(OperationStatus::error(
++                    OperationStatusCode::ConfigurationError,
++                    format!("Error generating key: {error:?}"),
++                ));
++            }
++        };
++
++        match CString::new(key_id) {
++            Ok(key_id) => FfiGenerateKeyResult::ok(key_id.into_raw()),
++            Err(error) => FfiGenerateKeyResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                format!("Failed to create CString: {error}"),
++            )),
+         }
+-    };
+-
+-    match CString::new(key_id) {
+-        Ok(key_id) => FfiGenerateKeyResult::ok(key_id.into_raw()),
+-        Err(error) => FfiGenerateKeyResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            format!("Failed to create CString: {error}"),
+-        )),
+-    }
++    })
+ }
+ 
+ /// Adds an existing key to the keystore and user config files, equivalent to
+@@ -136,37 +138,39 @@ pub unsafe extern "C" fn add_key(
+     key_hex: *const c_char,
+     key_title: *const c_char,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(user_config_path);
+-    return_error_if_null_pointer!(keystore_path);
+-    return_error_if_null_pointer!(key_hex);
+-
+-    let key_hex = unsafe { CStr::from_ptr(key_hex) }.to_string_lossy();
+-
+-    let key = match parse_key_hex(key_type, &key_hex) {
+-        Ok(key) => key,
+-        Err(error) => {
+-            return OperationStatus::error(
+-                OperationStatusCode::ValidationError,
+-                format!("Invalid key: {error}"),
+-            );
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(user_config_path);
++        return_error_if_null_pointer!(keystore_path);
++        return_error_if_null_pointer!(key_hex);
++
++        let key_hex = unsafe { CStr::from_ptr(key_hex) }.to_string_lossy();
++
++        let key = match parse_key_hex(key_type, &key_hex) {
++            Ok(key) => key,
++            Err(error) => {
++                return OperationStatus::error(
++                    OperationStatusCode::ValidationError,
++                    format!("Invalid key: {error}"),
++                );
++            }
++        };
++
++        let args = AddKeyArgs::new(
++            unsafe { cstr_to_path(user_config_path) },
++            unsafe { cstr_to_path(keystore_path) },
++            unsafe { key_title_from_ptr(key_title) },
++            &key,
++            true,
++        );
++
++        match run_add_key(args) {
++            Ok(()) => OperationStatus::OK,
++            Err(error) => OperationStatus::error(
++                OperationStatusCode::ConfigurationError,
++                format!("Error adding key: {error:?}"),
++            ),
+         }
+-    };
+-
+-    let args = AddKeyArgs::new(
+-        unsafe { cstr_to_path(user_config_path) },
+-        unsafe { cstr_to_path(keystore_path) },
+-        unsafe { key_title_from_ptr(key_title) },
+-        &key,
+-        true,
+-    );
+-
+-    match run_add_key(args) {
+-        Ok(()) => OperationStatus::OK,
+-        Err(error) => OperationStatus::error(
+-            OperationStatusCode::ConfigurationError,
+-            format!("Error adding key: {error:?}"),
+-        ),
+-    }
++    })
+ }
+ 
+ /// Parses a hex-encoded secret key of the given type into a [`Key`].
+@@ -211,26 +215,28 @@ pub unsafe extern "C" fn remove_key(
+     keystore_path: *const c_char,
+     key_title: *const c_char,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(user_config_path);
+-    return_error_if_null_pointer!(keystore_path);
+-    return_error_if_null_pointer!(key_title);
+-
+-    let key_title = unsafe { CStr::from_ptr(key_title) }
+-        .to_string_lossy()
+-        .to_string();
+-
+-    let args = RemoveKeyArgs::new(
+-        unsafe { cstr_to_path(user_config_path) },
+-        unsafe { cstr_to_path(keystore_path) },
+-        key_title,
+-        true,
+-    );
+-
+-    match run_remove_key(args) {
+-        Ok(()) => OperationStatus::OK,
+-        Err(error) => OperationStatus::error(
+-            OperationStatusCode::ConfigurationError,
+-            format!("Error removing key: {error:?}"),
+-        ),
+-    }
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(user_config_path);
++        return_error_if_null_pointer!(keystore_path);
++        return_error_if_null_pointer!(key_title);
++
++        let key_title = unsafe { CStr::from_ptr(key_title) }
++            .to_string_lossy()
++            .to_string();
++
++        let args = RemoveKeyArgs::new(
++            unsafe { cstr_to_path(user_config_path) },
++            unsafe { cstr_to_path(keystore_path) },
++            key_title,
++            true,
++        );
++
++        match run_remove_key(args) {
++            Ok(()) => OperationStatus::OK,
++            Err(error) => OperationStatus::error(
++                OperationStatusCode::ConfigurationError,
++                format!("Error removing key: {error:?}"),
++            ),
++        }
++    })
+ }
+diff --git a/c-bindings/src/api/leader.rs b/c-bindings/src/api/leader.rs
+index 4531e24c9..9a0c14427 100644
+--- a/c-bindings/src/api/leader.rs
++++ b/c-bindings/src/api/leader.rs
+@@ -82,19 +82,21 @@ pub type FfiLeaderClaimResult = FfiStatusResult<TxHash>;
+ /// [`LogosBlockchainNode`] instance.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn leader_claim(node: *const LogosBlockchainNode) -> FfiLeaderClaimResult {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    let tx_hash = unwrap_or_return_error!(leader_claim_sync(node));
++        let node = unsafe { &*node };
++        let tx_hash = unwrap_or_return_error!(leader_claim_sync(node));
+ 
+-    let Ok(tx_hash_array): Result<Hash, _> =
+-        tx_hash.as_signing_bytes().iter().as_slice().try_into()
+-    else {
+-        return FfiLeaderClaimResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "Failed to convert transaction hash to array.",
+-        ));
+-    };
++        let Ok(tx_hash_array): Result<Hash, _> =
++            tx_hash.as_signing_bytes().iter().as_slice().try_into()
++        else {
++            return FfiLeaderClaimResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                "Failed to convert transaction hash to array.",
++            ));
++        };
+ 
+-    FfiLeaderClaimResult::ok(tx_hash_array)
++        FfiLeaderClaimResult::ok(tx_hash_array)
++    })
+ }
+diff --git a/c-bindings/src/api/lifecycle.rs b/c-bindings/src/api/lifecycle.rs
+index 4e3ca0adb..146913510 100644
+--- a/c-bindings/src/api/lifecycle.rs
++++ b/c-bindings/src/api/lifecycle.rs
+@@ -43,10 +43,12 @@ pub extern "C" fn start_lb_node(
+     config_path: *const c_char,
+     custom_deployment_path: *const c_char,
+ ) -> FfiInitializedLogosBlockchainNodeResult {
+-    initialize_lb_node(config_path, custom_deployment_path).map_or_else(
+-        FfiInitializedLogosBlockchainNodeResult::err,
+-        FfiInitializedLogosBlockchainNodeResult::from_value,
+-    )
++    crate::macros::catch_panics(|| {
++        initialize_lb_node(config_path, custom_deployment_path).map_or_else(
++            FfiInitializedLogosBlockchainNodeResult::err,
++            FfiInitializedLogosBlockchainNodeResult::from_value,
++        )
++    })
+ }
+ 
+ /// Initializes and starts a Logos blockchain node based on the provided
+@@ -96,7 +98,12 @@ fn initialize_lb_node(
+     // for its chain without querying a service for a value that cannot change.
+     let chain_id = run_config.deployment.chain_id();
+ 
+-    let runtime = Runtime::new().expect("Failed to create Tokio runtime");
++    let runtime = Runtime::new().map_err(|e| {
++        OperationStatus::error(
++            OperationStatusCode::RuntimeError,
++            format!("Could not create the Tokio runtime: {e}"),
++        )
++    })?;
+     let app = run_node_from_config(run_config, Some(runtime.handle().clone())).map_err(|e| {
+         OperationStatus::error(
+             OperationStatusCode::InitializationError,
+@@ -194,9 +201,11 @@ fn get_deployment_config(
+ /// - The pointer will not be used after this function returns
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn shutdown_node(node: *mut LogosBlockchainNode) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { Box::from_raw(node) };
+-    node.shutdown()
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { Box::from_raw(node) };
++        node.shutdown()
++    })
+ }
+ 
+ #[cfg(test)]
+diff --git a/c-bindings/src/api/memory.rs b/c-bindings/src/api/memory.rs
+index 92e8e3b74..a0d0cc987 100644
+--- a/c-bindings/src/api/memory.rs
++++ b/c-bindings/src/api/memory.rs
+@@ -34,7 +34,9 @@ pub fn free<Type>(pointer: *mut Type) -> OperationStatus {
+ /// Passing a pointer from any other source will cause undefined behavior.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn free_cstring(pointer: *mut c_char) -> OperationStatus {
+-    return_error_if_null_pointer!(pointer);
+-    drop(unsafe { CString::from_raw(pointer) });
+-    OperationStatus::OK
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(pointer);
++        drop(unsafe { CString::from_raw(pointer) });
++        OperationStatus::OK
++    })
+ }
+diff --git a/c-bindings/src/api/network.rs b/c-bindings/src/api/network.rs
+index ce445d9b7..78718d30f 100644
+--- a/c-bindings/src/api/network.rs
++++ b/c-bindings/src/api/network.rs
+@@ -85,10 +85,12 @@ pub type FfiNetworkInfoResult = FfiStatusResult<NetworkInfo>;
+ pub unsafe extern "C" fn get_network_info(
+     node: *const LogosBlockchainNode,
+ ) -> FfiNetworkInfoResult {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    let info = unwrap_or_return_error!(get_network_info_sync(node));
++        let node = unsafe { &*node };
++        let info = unwrap_or_return_error!(get_network_info_sync(node));
+ 
+-    FfiNetworkInfoResult::ok(NetworkInfo::from(info))
++        FfiNetworkInfoResult::ok(NetworkInfo::from(info))
++    })
+ }
+diff --git a/c-bindings/src/api/peer.rs b/c-bindings/src/api/peer.rs
+index 4a4675c1c..2a6790e25 100644
+--- a/c-bindings/src/api/peer.rs
++++ b/c-bindings/src/api/peer.rs
+@@ -34,25 +34,27 @@ pub type FfiGetPeerIdResult = FfiStatusResult<*mut c_char>;
+ #[must_use]
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn get_peer_id(config_path: *const c_char) -> FfiGetPeerIdResult {
+-    return_error_if_null_pointer!(config_path);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(config_path);
+ 
+-    let config_path = unsafe { cstr_to_path(config_path) };
++        let config_path = unsafe { cstr_to_path(config_path) };
+ 
+-    let peer_id = match lb_node::cli::get_peer_id::peer_id_from_config(&config_path) {
+-        Ok(peer_id) => peer_id,
+-        Err(error) => {
+-            return FfiGetPeerIdResult::err(OperationStatus::error(
+-                OperationStatusCode::ConfigurationError,
+-                format!("Error deriving peer id: {error:?}"),
+-            ));
+-        }
+-    };
++        let peer_id = match lb_node::cli::get_peer_id::peer_id_from_config(&config_path) {
++            Ok(peer_id) => peer_id,
++            Err(error) => {
++                return FfiGetPeerIdResult::err(OperationStatus::error(
++                    OperationStatusCode::ConfigurationError,
++                    format!("Error deriving peer id: {error:?}"),
++                ));
++            }
++        };
+ 
+-    match CString::new(peer_id.to_string()) {
+-        Ok(peer_id) => FfiGetPeerIdResult::ok(peer_id.into_raw()),
+-        Err(error) => FfiGetPeerIdResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            format!("Failed to create CString: {error}"),
+-        )),
+-    }
++        match CString::new(peer_id.to_string()) {
++            Ok(peer_id) => FfiGetPeerIdResult::ok(peer_id.into_raw()),
++            Err(error) => FfiGetPeerIdResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                format!("Failed to create CString: {error}"),
++            )),
++        }
++    })
+ }
+diff --git a/c-bindings/src/api/pow.rs b/c-bindings/src/api/pow.rs
+index ddd8b6342..f71e74b7c 100644
+--- a/c-bindings/src/api/pow.rs
++++ b/c-bindings/src/api/pow.rs
+@@ -58,12 +58,14 @@ pub(crate) fn pow_start_mining_sync(node: &LogosBlockchainNode) -> StatusResult<
+ /// [`LogosBlockchainNode`] instance.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn pow_start_mining(node: *const LogosBlockchainNode) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    unwrap_or_return_error!(pow_start_mining_sync(node));
++        let node = unsafe { &*node };
++        unwrap_or_return_error!(pow_start_mining_sync(node));
+ 
+-    OperationStatus::OK
++        OperationStatus::OK
++    })
+ }
+ 
+ /// Disables `PoW` mining.
+@@ -112,12 +114,14 @@ pub(crate) fn pow_stop_mining_sync(node: &LogosBlockchainNode) -> StatusResult<(
+ /// [`LogosBlockchainNode`] instance.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn pow_stop_mining(node: *const LogosBlockchainNode) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    unwrap_or_return_error!(pow_stop_mining_sync(node));
++        let node = unsafe { &*node };
++        unwrap_or_return_error!(pow_stop_mining_sync(node));
+ 
+-    OperationStatus::OK
++        OperationStatus::OK
++    })
+ }
+ 
+ /// Enables unattended `PoW` claiming.
+@@ -168,12 +172,14 @@ pub(crate) fn pow_start_auto_claim_sync(node: &LogosBlockchainNode) -> StatusRes
+ /// [`LogosBlockchainNode`] instance.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn pow_start_auto_claim(node: *const LogosBlockchainNode) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    unwrap_or_return_error!(pow_start_auto_claim_sync(node));
++        let node = unsafe { &*node };
++        unwrap_or_return_error!(pow_start_auto_claim_sync(node));
+ 
+-    OperationStatus::OK
++        OperationStatus::OK
++    })
+ }
+ 
+ /// Disables unattended `PoW` claiming. Manual claims keep working.
+@@ -222,12 +228,14 @@ pub(crate) fn pow_stop_auto_claim_sync(node: &LogosBlockchainNode) -> StatusResu
+ /// [`LogosBlockchainNode`] instance.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn pow_stop_auto_claim(node: *const LogosBlockchainNode) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    unwrap_or_return_error!(pow_stop_auto_claim_sync(node));
++        let node = unsafe { &*node };
++        unwrap_or_return_error!(pow_stop_auto_claim_sync(node));
+ 
+-    OperationStatus::OK
++        OperationStatus::OK
++    })
+ }
+ 
+ /// Builds and publishes a reward-claim transaction for the currently claimable
+@@ -300,29 +308,31 @@ pub unsafe extern "C" fn pow_claim(
+     node: *const LogosBlockchainNode,
+     claim_address: *const u8,
+ ) -> FfiPoWClaimResult {
+-    return_error_if_null_pointer!(node);
+-
+-    let claim_address = if claim_address.is_null() {
+-        None
+-    } else {
+-        Some(unwrap_or_return_error!(unsafe {
+-            parse_public_key(claim_address)
+-        }))
+-    };
+-
+-    let node = unsafe { &*node };
+-    let tx_hash = unwrap_or_return_error!(pow_claim_sync(node, claim_address));
+-
+-    let Ok(tx_hash_array): Result<Hash, _> =
+-        tx_hash.as_signing_bytes().iter().as_slice().try_into()
+-    else {
+-        return FfiPoWClaimResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "Failed to convert transaction hash to array.",
+-        ));
+-    };
+-
+-    FfiPoWClaimResult::ok(tx_hash_array)
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++
++        let claim_address = if claim_address.is_null() {
++            None
++        } else {
++            Some(unwrap_or_return_error!(unsafe {
++                parse_public_key(claim_address)
++            }))
++        };
++
++        let node = unsafe { &*node };
++        let tx_hash = unwrap_or_return_error!(pow_claim_sync(node, claim_address));
++
++        let Ok(tx_hash_array): Result<Hash, _> =
++            tx_hash.as_signing_bytes().iter().as_slice().try_into()
++        else {
++            return FfiPoWClaimResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                "Failed to convert transaction hash to array.",
++            ));
++        };
++
++        FfiPoWClaimResult::ok(tx_hash_array)
++    })
+ }
+ 
+ /// The rewards this node can currently claim.
+@@ -407,20 +417,22 @@ pub type FfiPoWClaimableRewardsResult = FfiStatusResult<PoWClaimableRewards>;
+ pub unsafe extern "C" fn pow_claimable_rewards(
+     node: *const LogosBlockchainNode,
+ ) -> FfiPoWClaimableRewardsResult {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    let info = unwrap_or_return_error!(pow_claimable_rewards_sync(node));
++        let node = unsafe { &*node };
++        let info = unwrap_or_return_error!(pow_claimable_rewards_sync(node));
+ 
+-    let slots: Vec<u64> = info.slots_until_expiry.into_iter().map(u64::from).collect();
++        let slots: Vec<u64> = info.slots_until_expiry.into_iter().map(u64::from).collect();
+ 
+-    let len = slots.len();
+-    let slots_ptr = Box::leak(slots.into_boxed_slice()).as_mut_ptr();
++        let len = slots.len();
++        let slots_ptr = Box::leak(slots.into_boxed_slice()).as_mut_ptr();
+ 
+-    FfiPoWClaimableRewardsResult::ok(PoWClaimableRewards {
+-        claimable_tickets: info.claimable_tickets,
+-        slots_until_expiry: slots_ptr,
+-        len,
++        FfiPoWClaimableRewardsResult::ok(PoWClaimableRewards {
++            claimable_tickets: info.claimable_tickets,
++            slots_until_expiry: slots_ptr,
++            len,
++        })
+     })
+ }
+ 
+@@ -440,14 +452,16 @@ pub unsafe extern "C" fn pow_claimable_rewards(
+ pub unsafe extern "C" fn free_pow_claimable_rewards(
+     rewards: PoWClaimableRewards,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(rewards.slots_until_expiry);
+-    let slots = unsafe {
+-        Box::from_raw(ptr::slice_from_raw_parts_mut(
+-            rewards.slots_until_expiry,
+-            rewards.len,
+-        ))
+-    };
+-
+-    drop(slots);
+-    OperationStatus::OK
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(rewards.slots_until_expiry);
++        let slots = unsafe {
++            Box::from_raw(ptr::slice_from_raw_parts_mut(
++                rewards.slots_until_expiry,
++                rewards.len,
++            ))
++        };
++
++        drop(slots);
++        OperationStatus::OK
++    })
+ }
+diff --git a/c-bindings/src/api/storage.rs b/c-bindings/src/api/storage.rs
+index 531c38149..f2ecfd72d 100644
+--- a/c-bindings/src/api/storage.rs
++++ b/c-bindings/src/api/storage.rs
+@@ -107,13 +107,15 @@ pub unsafe extern "C" fn get_block(
+     node: *const LogosBlockchainNode,
+     header_id: *const HeaderId,
+ ) -> FfiGetBlockResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(header_id);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(header_id);
+ 
+-    let header_id = unsafe { *header_id };
+-    let node = unsafe { &*node };
+-    let json_cstring = unwrap_or_return_error!(get_block_sync(node, header_id));
+-    FfiGetBlockResult::ok(json_cstring.into_raw())
++        let header_id = unsafe { *header_id };
++        let node = unsafe { &*node };
++        let json_cstring = unwrap_or_return_error!(get_block_sync(node, header_id));
++        FfiGetBlockResult::ok(json_cstring.into_raw())
++    })
+ }
+ 
+ /// Gets a transaction by its hash as a JSON string.
+@@ -210,13 +212,15 @@ pub unsafe extern "C" fn get_transaction(
+     node: *const LogosBlockchainNode,
+     tx_hash: *const TxHash,
+ ) -> FfiGetTransactionResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(tx_hash);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(tx_hash);
+ 
+-    let node = unsafe { &*node };
+-    let tx_hash = unsafe { into_tx_hash(tx_hash) };
+-    let json_cstring = unwrap_or_return_error!(get_transaction_sync(node, tx_hash));
+-    FfiGetTransactionResult::ok(json_cstring.into_raw())
++        let node = unsafe { &*node };
++        let tx_hash = unsafe { into_tx_hash(tx_hash) };
++        let json_cstring = unwrap_or_return_error!(get_transaction_sync(node, tx_hash));
++        FfiGetTransactionResult::ok(json_cstring.into_raw())
++    })
+ }
+ 
+ /// Gets blocks in a slot range as a JSON array string.
+@@ -306,22 +310,24 @@ pub unsafe extern "C" fn get_blocks(
+     from_slot: u64,
+     to_slot: u64,
+ ) -> FfiGetBlocksResult {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let Ok(from_slot) = usize::try_from(from_slot) else {
+-        return FfiGetBlocksResult::err(OperationStatus::error(
+-            OperationStatusCode::ValidationError,
+-            "from_slot overflow.",
+-        ));
+-    };
+-    let Ok(to_slot) = usize::try_from(to_slot) else {
+-        return FfiGetBlocksResult::err(OperationStatus::error(
+-            OperationStatusCode::ValidationError,
+-            "to_slot overflow.",
+-        ));
+-    };
++        let Ok(from_slot) = usize::try_from(from_slot) else {
++            return FfiGetBlocksResult::err(OperationStatus::error(
++                OperationStatusCode::ValidationError,
++                "from_slot overflow.",
++            ));
++        };
++        let Ok(to_slot) = usize::try_from(to_slot) else {
++            return FfiGetBlocksResult::err(OperationStatus::error(
++                OperationStatusCode::ValidationError,
++                "to_slot overflow.",
++            ));
++        };
+ 
+-    let node = unsafe { &*node };
+-    let json_cstring = unwrap_or_return_error!(get_blocks_sync(node, from_slot, to_slot));
+-    FfiGetBlocksResult::ok(json_cstring.into_raw())
++        let node = unsafe { &*node };
++        let json_cstring = unwrap_or_return_error!(get_blocks_sync(node, from_slot, to_slot));
++        FfiGetBlocksResult::ok(json_cstring.into_raw())
++    })
+ }
+diff --git a/c-bindings/src/api/subscriptions.rs b/c-bindings/src/api/subscriptions.rs
+index 625a8d139..e692b593c 100644
+--- a/c-bindings/src/api/subscriptions.rs
++++ b/c-bindings/src/api/subscriptions.rs
+@@ -1,4 +1,8 @@
+-use std::ffi::{CString, c_char};
++use std::{
++    ffi::{CString, c_char},
++    sync::mpsc,
++    thread,
++};
+ 
+ use futures::StreamExt as _;
+ use lb_api_service::http::storage::StorageAdapter as _;
+@@ -55,13 +59,77 @@ impl StorageSize for TxWithId {
+     }
+ }
+ 
++/// Delivers subscription events to the embedder's callback from a dedicated
++/// OS thread rather than from a runtime worker.
++///
++/// Every other exported function reaches the node through
++/// `Handle::block_on`, which tokio refuses (by panicking) on a thread that is
++/// already driving the runtime. Running the callback on its own thread makes
++/// calling back into this library from a callback legal. Events are queued
++/// unboundedly, so a slow callback delays delivery but never blocks the node.
++///
++/// Dropping the returned sender ends the thread. When `end_with_null` is set,
++/// the thread then calls the callback exactly once with NULL.
++fn spawn_callback_thread<Event>(
++    name: &str,
++    mut on_event: BoxedCallback<*const c_char>,
++    as_ptr: impl Fn(&Event) -> *const c_char + Send + 'static,
++    end_with_null: bool,
++) -> Result<mpsc::Sender<Event>, OperationStatus>
++where
++    Event: Send + 'static,
++{
++    let (sender, receiver) = mpsc::channel::<Event>();
++    thread::Builder::new()
++        .name(name.to_owned())
++        .spawn(move || {
++            while let Ok(event) = receiver.recv() {
++                on_event(as_ptr(&event));
++            }
++            if end_with_null {
++                on_event(std::ptr::null());
++            }
++        })
++        .map_err(|error| {
++            OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                format!("Could not spawn the callback thread: {error}"),
++            )
++        })?;
++    Ok(sender)
++}
++
++/// Serializes `value` as JSON into a NUL-terminated string, or logs why it
++/// could not be.
++fn to_json_cstring<T: Serialize>(scope: &str, value: &T) -> Option<CString> {
++    let json = serde_json::to_string(value)
++        .map_err(|error| {
++            logging::error!(scope, "Could not serialize an event: {error}");
++        })
++        .ok()?;
++    CString::new(json)
++        .map_err(|error| {
++            logging::error!(scope, "Event JSON contains a NUL byte: {error}");
++        })
++        .ok()
++}
++
+ #[must_use]
+ pub fn subscribe_to_new_blocks_sync(
+     node: &LogosBlockchainNode,
+-    mut callback_per_block: BoxedCallback<*const c_char>,
++    callback_per_block: BoxedCallback<*const c_char>,
+ ) -> OperationStatus {
+     let runtime_handler = node.get_runtime_handle();
+     let overwatch = node.get_overwatch_handle();
++    let sender = match spawn_callback_thread(
++        "lb-ffi-new-blocks",
++        callback_per_block,
++        Block::as_ptr,
++        false,
++    ) {
++        Ok(sender) => sender,
++        Err(error) => return error,
++    };
+     runtime_handler.block_on(async move {
+         let Ok(relay) = overwatch
+             .relay::<CryptarchiaService<RuntimeServiceId>>()
+@@ -106,7 +174,9 @@ pub fn subscribe_to_new_blocks_sync(
+                                 *block.signature(),
+                             )
+                             .expect("Block should always build from valid block");
+-                            callback_per_block(Block::from(block).as_ptr());
++                            if sender.send(Block::from(block)).is_err() {
++                                break;
++                            }
+                         } else {
+                             logging::error!(
+                                 "subscribe_to_new_blocks_sync",
+@@ -146,7 +216,8 @@ pub fn subscribe_to_new_blocks_sync(
+ /// - `callback_per_block`: A callback function that will be called with a
+ ///   pointer to a C string containing the JSON representation of each new
+ ///   block. The callback is declared as unsafe extern "C" and must be
+-///   thread-safe.
++///   thread-safe. It runs on a dedicated thread owned by this library, not on
++///   a node runtime thread, so it may call any function of this library.
+ ///
+ /// # Returns
+ ///
+@@ -160,30 +231,30 @@ pub unsafe extern "C" fn subscribe_to_new_blocks(
+     node: *const LogosBlockchainNode,
+     callback_per_block: CCallback<*const c_char>,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
+-    let callback_per_block = into_boxed_callback(callback_per_block);
+-    subscribe_to_new_blocks_sync(node, callback_per_block)
+-}
+-
+-/// Serializes `value` as JSON and invokes `on_event` with a pointer to the
+-/// NUL-terminated string. The pointer is only valid for the duration of the
+-/// callback invocation.
+-fn emit_json<T: Serialize>(value: &T, on_event: &mut BoxedCallback<*const c_char>) {
+-    let json = CString::new(
+-        serde_json::to_string(value).expect("Serialization of an event should always succeed"),
+-    )
+-    .expect("Event JSON should not contain NUL bytes");
+-    on_event(json.as_ptr());
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
++        let callback_per_block = into_boxed_callback(callback_per_block);
++        subscribe_to_new_blocks_sync(node, callback_per_block)
++    })
+ }
+ 
+ #[must_use]
+ pub fn subscribe_to_processed_blocks_sync(
+     node: &LogosBlockchainNode,
+-    mut on_event: BoxedCallback<*const c_char>,
++    on_event: BoxedCallback<*const c_char>,
+ ) -> OperationStatus {
+     let runtime_handler = node.get_runtime_handle();
+     let overwatch = node.get_overwatch_handle();
++    let sender = match spawn_callback_thread(
++        "lb-ffi-processed-blocks",
++        on_event,
++        |json: &CString| json.as_ptr(),
++        true,
++    ) {
++        Ok(sender) => sender,
++        Err(error) => return error,
++    };
+     runtime_handler.block_on(async move {
+         let stream = match lb_api_service::http::mantle::get_new_blocks_stream::<
+             SignedOps<Preverified, StandardMode>,
+@@ -204,9 +275,18 @@ pub fn subscribe_to_processed_blocks_sync(
+         runtime_handler.spawn(async move {
+             let mut stream = Box::pin(stream);
+             while let Some(event) = stream.next().await {
+-                emit_json(&ApiProcessedBlockEventOwned::from(event), &mut on_event);
++                let Some(json) = to_json_cstring(
++                    "subscribe_to_processed_blocks_sync",
++                    &ApiProcessedBlockEventOwned::from(event),
++                ) else {
++                    continue;
++                };
++                if sender.send(json).is_err() {
++                    break;
++                }
+             }
+-            on_event(std::ptr::null());
++            // Dropping `sender` ends the callback thread, which delivers the
++            // NULL sentinel exactly once.
+         });
+         OperationStatus::OK
+     })
+@@ -228,7 +308,9 @@ pub fn subscribe_to_processed_blocks_sync(
+ ///   call — copy the data if it is needed longer. When the stream ends (e.g. on
+ ///   node shutdown) the callback is called exactly once with NULL, after which
+ ///   no further events are delivered; re-subscribe to keep receiving events.
+-///   Declared unsafe extern "C"; must be thread-safe.
++///   Declared unsafe extern "C"; must be thread-safe. It runs on a dedicated
++///   thread owned by this library, not on a node runtime thread, so it may
++///   call any function of this library.
+ ///
+ /// # Returns
+ ///
+@@ -243,18 +325,29 @@ pub unsafe extern "C" fn subscribe_to_processed_blocks(
+     node: *const LogosBlockchainNode,
+     callback_per_event: CCallback<*const c_char>,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
+-    subscribe_to_processed_blocks_sync(node, into_boxed_callback(callback_per_event))
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
++        subscribe_to_processed_blocks_sync(node, into_boxed_callback(callback_per_event))
++    })
+ }
+ 
+ #[must_use]
+ pub fn subscribe_to_lib_blocks_sync(
+     node: &LogosBlockchainNode,
+-    mut on_event: BoxedCallback<*const c_char>,
++    on_event: BoxedCallback<*const c_char>,
+ ) -> OperationStatus {
+     let runtime_handler = node.get_runtime_handle();
+     let overwatch = node.get_overwatch_handle();
++    let sender = match spawn_callback_thread(
++        "lb-ffi-lib-blocks",
++        on_event,
++        |json: &CString| json.as_ptr(),
++        true,
++    ) {
++        Ok(sender) => sender,
++        Err(error) => return error,
++    };
+     runtime_handler.block_on(async move {
+         let stream = match lb_api_service::http::mantle::lib_block_stream(overwatch).await {
+             Ok(stream) => stream,
+@@ -270,7 +363,14 @@ pub fn subscribe_to_lib_blocks_sync(
+             while let Some(item) = stream.next().await {
+                 match item {
+                     Ok(block_info) => {
+-                        emit_json(&block_info, &mut on_event);
++                        let Some(json) =
++                            to_json_cstring("subscribe_to_lib_blocks_sync", &block_info)
++                        else {
++                            continue;
++                        };
++                        if sender.send(json).is_err() {
++                            break;
++                        }
+                     }
+                     Err(e) => {
+                         logging::error!(
+@@ -281,7 +381,8 @@ pub fn subscribe_to_lib_blocks_sync(
+                     }
+                 }
+             }
+-            on_event(std::ptr::null());
++            // Dropping `sender` ends the callback thread, which delivers the
++            // NULL sentinel exactly once.
+         });
+         OperationStatus::OK
+     })
+@@ -301,7 +402,9 @@ pub fn subscribe_to_lib_blocks_sync(
+ ///   call — copy the data if it is needed longer. When the stream ends or fails
+ ///   the callback is called exactly once with NULL, after which no further
+ ///   events are delivered; re-subscribe to keep receiving events. Declared
+-///   unsafe extern "C"; must be thread-safe.
++///   unsafe extern "C"; must be thread-safe. It runs on a dedicated thread
++///   owned by this library, not on a node runtime thread, so it may call any
++///   function of this library.
+ ///
+ /// # Returns
+ ///
+@@ -316,7 +419,9 @@ pub unsafe extern "C" fn subscribe_to_lib_blocks(
+     node: *const LogosBlockchainNode,
+     callback_per_event: CCallback<*const c_char>,
+ ) -> OperationStatus {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
+-    subscribe_to_lib_blocks_sync(node, into_boxed_callback(callback_per_event))
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
++        subscribe_to_lib_blocks_sync(node, into_boxed_callback(callback_per_event))
++    })
+ }
+diff --git a/c-bindings/src/api/time.rs b/c-bindings/src/api/time.rs
+index 44526f940..d68e9f9c2 100644
+--- a/c-bindings/src/api/time.rs
++++ b/c-bindings/src/api/time.rs
+@@ -103,11 +103,13 @@ pub type FfiTimeInfoResult = FfiStatusResult<*mut TimeInfo>;
+ /// caller must free this memory using the [`free_time_info`] function.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn get_time_info(node: *const LogosBlockchainNode) -> FfiTimeInfoResult {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
+-    let time_info = unwrap_or_return_error!(get_time_info_sync(node));
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
++        let time_info = unwrap_or_return_error!(get_time_info_sync(node));
+ 
+-    FfiTimeInfoResult::from_value(time_info)
++        FfiTimeInfoResult::from_value(time_info)
++    })
+ }
+ 
+ /// Frees the memory allocated for a [`TimeInfo`] struct.
+@@ -117,5 +119,5 @@ pub unsafe extern "C" fn get_time_info(node: *const LogosBlockchainNode) -> FfiT
+ /// - `pointer`: A pointer to the [`TimeInfo`] struct to be freed.
+ #[unsafe(no_mangle)]
+ pub extern "C" fn free_time_info(pointer: *mut TimeInfo) -> OperationStatus {
+-    free::<TimeInfo>(pointer)
++    crate::macros::catch_panics(|| free::<TimeInfo>(pointer))
+ }
+diff --git a/c-bindings/src/api/wallet.rs b/c-bindings/src/api/wallet.rs
+index 1d3338ce0..22c49f7d6 100644
+--- a/c-bindings/src/api/wallet.rs
++++ b/c-bindings/src/api/wallet.rs
+@@ -158,24 +158,26 @@ pub type FfiKnownAddressesResult = FfiStatusResult<KnownAddresses>;
+ pub unsafe extern "C" fn get_known_addresses(
+     node: *const LogosBlockchainNode,
+ ) -> FfiKnownAddressesResult {
+-    return_error_if_null_pointer!(node);
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
+ 
+-    let node = unsafe { &*node };
+-    let addresses = unwrap_or_return_error!(get_known_addresses_sync(node));
++        let node = unsafe { &*node };
++        let addresses = unwrap_or_return_error!(get_known_addresses_sync(node));
+ 
+-    let address_pointers: Vec<*mut u8> = addresses
+-        .into_iter()
+-        .map(|pk| {
+-            let bytes = fr_to_bytes(pk.as_fr());
+-            Box::into_raw(Box::new(bytes)).cast::<u8>()
+-        })
+-        .collect();
+-    let len = address_pointers.len();
+-    let addresses_ptr = Box::leak(address_pointers.into_boxed_slice()).as_mut_ptr();
++        let address_pointers: Vec<*mut u8> = addresses
++            .into_iter()
++            .map(|pk| {
++                let bytes = fr_to_bytes(pk.as_fr());
++                Box::into_raw(Box::new(bytes)).cast::<u8>()
++            })
++            .collect();
++        let len = address_pointers.len();
++        let addresses_ptr = Box::leak(address_pointers.into_boxed_slice()).as_mut_ptr();
+ 
+-    FfiKnownAddressesResult::ok(KnownAddresses {
+-        addresses: addresses_ptr,
+-        len,
++        FfiKnownAddressesResult::ok(KnownAddresses {
++            addresses: addresses_ptr,
++            len,
++        })
+     })
+ }
+ 
+@@ -234,18 +236,20 @@ pub unsafe extern "C" fn get_known_addresses(
+ /// ```
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn free_known_addresses(addresses: KnownAddresses) -> OperationStatus {
+-    return_error_if_null_pointer!(addresses.addresses);
+-    let address_pointers = unsafe {
+-        Box::from_raw(ptr::slice_from_raw_parts_mut(
+-            addresses.addresses,
+-            addresses.len,
+-        ))
+-    };
+-    for address_pointer in address_pointers {
+-        return_error_if_null_pointer!(address_pointer);
+-        unsafe { drop(Box::from_raw(address_pointer.cast::<[u8; 32]>())) };
+-    }
+-    OperationStatus::OK
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(addresses.addresses);
++        let address_pointers = unsafe {
++            Box::from_raw(ptr::slice_from_raw_parts_mut(
++                addresses.addresses,
++                addresses.len,
++            ))
++        };
++        for address_pointer in address_pointers {
++            return_error_if_null_pointer!(address_pointer);
++            unsafe { drop(Box::from_raw(address_pointer.cast::<[u8; 32]>())) };
++        }
++        OperationStatus::OK
++    })
+ }
+ 
+ /// Gets the claimable vouchers tracked by the wallet.
+@@ -312,34 +316,36 @@ pub unsafe extern "C" fn get_claimable_vouchers(
+     node: *const LogosBlockchainNode,
+     optional_tip: *const HeaderId,
+ ) -> FfiClaimableVouchersResult {
+-    return_error_if_null_pointer!(node);
+-    let node = unsafe { &*node };
+-    let tip = if optional_tip.is_null() {
+-        None
+-    } else {
+-        Some(CoreHeaderId::from(unsafe { *optional_tip }))
+-    };
+-
+-    let response = unwrap_or_return_error!(get_claimable_vouchers_sync(node, tip));
+-    let vouchers: Vec<ClaimableVoucher> = response
+-        .response
+-        .into_iter()
+-        .map(|voucher| {
+-            let nullifier = voucher.nullifier.into();
+-            ClaimableVoucher {
+-                commitment: voucher.commitment.to_bytes(),
+-                nullifier: fr_to_bytes(&nullifier),
+-            }
+-        })
+-        .collect();
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        let node = unsafe { &*node };
++        let tip = if optional_tip.is_null() {
++            None
++        } else {
++            Some(CoreHeaderId::from(unsafe { *optional_tip }))
++        };
+ 
+-    let len = vouchers.len();
+-    let vouchers_ptr = Box::leak(vouchers.into_boxed_slice()).as_mut_ptr();
++        let response = unwrap_or_return_error!(get_claimable_vouchers_sync(node, tip));
++        let vouchers: Vec<ClaimableVoucher> = response
++            .response
++            .into_iter()
++            .map(|voucher| {
++                let nullifier = voucher.nullifier.into();
++                ClaimableVoucher {
++                    commitment: voucher.commitment.to_bytes(),
++                    nullifier: fr_to_bytes(&nullifier),
++                }
++            })
++            .collect();
++
++        let len = vouchers.len();
++        let vouchers_ptr = Box::leak(vouchers.into_boxed_slice()).as_mut_ptr();
+ 
+-    FfiClaimableVouchersResult::ok(ClaimableVouchers {
+-        tip: response.tip.into(),
+-        vouchers: vouchers_ptr,
+-        len,
++        FfiClaimableVouchersResult::ok(ClaimableVouchers {
++            tip: response.tip.into(),
++            vouchers: vouchers_ptr,
++            len,
++        })
+     })
+ }
+ 
+@@ -357,16 +363,18 @@ pub unsafe extern "C" fn get_claimable_vouchers(
+ /// [`get_claimable_vouchers`] and must call this exactly once per result.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn free_claimable_vouchers(vouchers: ClaimableVouchers) -> OperationStatus {
+-    return_error_if_null_pointer!(vouchers.vouchers);
+-    let vouchers = unsafe {
+-        Box::from_raw(ptr::slice_from_raw_parts_mut(
+-            vouchers.vouchers,
+-            vouchers.len,
+-        ))
+-    };
+-
+-    drop(vouchers);
+-    OperationStatus::OK
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(vouchers.vouchers);
++        let vouchers = unsafe {
++            Box::from_raw(ptr::slice_from_raw_parts_mut(
++                vouchers.vouchers,
++                vouchers.len,
++            ))
++        };
++
++        drop(vouchers);
++        OperationStatus::OK
++    })
+ }
+ 
+ /// Get the balance of a wallet address
+@@ -434,36 +442,38 @@ pub unsafe extern "C" fn get_balance(
+     wallet_address: *const u8,
+     optional_tip: *const HeaderId,
+ ) -> FfiBalanceResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(wallet_address);
+-    let node = unsafe { &*node };
+-    let tip = if optional_tip.is_null() {
+-        unwrap_or_return_error!(get_cryptarchia_info_sync(node))
+-            .cryptarchia_info
+-            .tip
+-    } else {
+-        lb_core::header::HeaderId::from(unsafe { *optional_tip })
+-    };
+-    let wallet_address_bytes = unsafe { std::slice::from_raw_parts(wallet_address, 32) };
+-    let wallet_address = unwrap_or_return_error!(
+-        fr_from_bytes(wallet_address_bytes)
+-            .map(ZkPublicKey::new)
+-            .map_err(|error| {
+-                OperationStatus::error(
+-                    OperationStatusCode::DynError,
+-                    format!("Invalid wallet address: {error:?}"),
+-                )
+-            })
+-    );
+-
+-    match get_balance_sync(node, tip, wallet_address) {
+-        Ok(Some(balance)) => FfiBalanceResult::ok(balance),
+-        Ok(None) => FfiBalanceResult::err(OperationStatus::error(
+-            OperationStatusCode::NotFound,
+-            "Unknown wallet address.",
+-        )),
+-        Err(status) => FfiBalanceResult::err(status),
+-    }
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(wallet_address);
++        let node = unsafe { &*node };
++        let tip = if optional_tip.is_null() {
++            unwrap_or_return_error!(get_cryptarchia_info_sync(node))
++                .cryptarchia_info
++                .tip
++        } else {
++            lb_core::header::HeaderId::from(unsafe { *optional_tip })
++        };
++        let wallet_address_bytes = unsafe { std::slice::from_raw_parts(wallet_address, 32) };
++        let wallet_address = unwrap_or_return_error!(
++            fr_from_bytes(wallet_address_bytes)
++                .map(ZkPublicKey::new)
++                .map_err(|error| {
++                    OperationStatus::error(
++                        OperationStatusCode::DynError,
++                        format!("Invalid wallet address: {error:?}"),
++                    )
++                })
++        );
++
++        match get_balance_sync(node, tip, wallet_address) {
++            Ok(Some(balance)) => FfiBalanceResult::ok(balance),
++            Ok(None) => FfiBalanceResult::err(OperationStatus::error(
++                OperationStatusCode::NotFound,
++                "Unknown wallet address.",
++            )),
++            Err(status) => FfiBalanceResult::err(status),
++        }
++    })
+ }
+ 
+ /// Gets the spendable notes (UTXOs) of a wallet address.
+@@ -542,51 +552,53 @@ pub unsafe extern "C" fn get_wallet_notes(
+     wallet_address: *const u8,
+     optional_tip: *const HeaderId,
+ ) -> FfiWalletNotesResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(wallet_address);
+-    let node = unsafe { &*node };
+-    let tip = if optional_tip.is_null() {
+-        unwrap_or_return_error!(get_cryptarchia_info_sync(node))
+-            .cryptarchia_info
+-            .tip
+-    } else {
+-        lb_core::header::HeaderId::from(unsafe { *optional_tip })
+-    };
+-    let wallet_address_bytes = unsafe { std::slice::from_raw_parts(wallet_address, 32) };
+-    let wallet_address = unwrap_or_return_error!(
+-        fr_from_bytes(wallet_address_bytes)
+-            .map(ZkPublicKey::new)
+-            .map_err(|error| {
+-                OperationStatus::error(
+-                    OperationStatusCode::DynError,
+-                    format!("Invalid wallet address: {error:?}"),
+-                )
+-            })
+-    );
+-
+-    match get_wallet_notes_sync(node, tip, wallet_address) {
+-        Ok(Some((resolved_tip, notes))) => {
+-            let notes: Vec<WalletNote> = notes
+-                .into_iter()
+-                .map(|(id, value)| WalletNote {
+-                    id: fr_to_bytes(id.as_fr()),
+-                    value,
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(wallet_address);
++        let node = unsafe { &*node };
++        let tip = if optional_tip.is_null() {
++            unwrap_or_return_error!(get_cryptarchia_info_sync(node))
++                .cryptarchia_info
++                .tip
++        } else {
++            lb_core::header::HeaderId::from(unsafe { *optional_tip })
++        };
++        let wallet_address_bytes = unsafe { std::slice::from_raw_parts(wallet_address, 32) };
++        let wallet_address = unwrap_or_return_error!(
++            fr_from_bytes(wallet_address_bytes)
++                .map(ZkPublicKey::new)
++                .map_err(|error| {
++                    OperationStatus::error(
++                        OperationStatusCode::DynError,
++                        format!("Invalid wallet address: {error:?}"),
++                    )
+                 })
+-                .collect();
+-            let len = notes.len();
+-            let notes_ptr = Box::leak(notes.into_boxed_slice()).as_mut_ptr();
+-            FfiWalletNotesResult::ok(WalletNotes {
+-                tip: resolved_tip.into(),
+-                notes: notes_ptr,
+-                len,
+-            })
++        );
++
++        match get_wallet_notes_sync(node, tip, wallet_address) {
++            Ok(Some((resolved_tip, notes))) => {
++                let notes: Vec<WalletNote> = notes
++                    .into_iter()
++                    .map(|(id, value)| WalletNote {
++                        id: fr_to_bytes(id.as_fr()),
++                        value,
++                    })
++                    .collect();
++                let len = notes.len();
++                let notes_ptr = Box::leak(notes.into_boxed_slice()).as_mut_ptr();
++                FfiWalletNotesResult::ok(WalletNotes {
++                    tip: resolved_tip.into(),
++                    notes: notes_ptr,
++                    len,
++                })
++            }
++            Ok(None) => FfiWalletNotesResult::err(OperationStatus::error(
++                OperationStatusCode::NotFound,
++                "Unknown wallet address.",
++            )),
++            Err(status) => FfiWalletNotesResult::err(status),
+         }
+-        Ok(None) => FfiWalletNotesResult::err(OperationStatus::error(
+-            OperationStatusCode::NotFound,
+-            "Unknown wallet address.",
+-        )),
+-        Err(status) => FfiWalletNotesResult::err(status),
+-    }
++    })
+ }
+ 
+ /// Frees the memory allocated for a [`WalletNotes`] structure.
+@@ -598,12 +610,14 @@ pub unsafe extern "C" fn get_wallet_notes(
+ /// and must call this exactly once per result.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn free_wallet_notes(notes: WalletNotes) -> OperationStatus {
+-    if notes.notes.is_null() {
+-        return OperationStatus::OK;
+-    }
+-    let notes = unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(notes.notes, notes.len)) };
+-    drop(notes);
+-    OperationStatus::OK
++    crate::macros::catch_panics(|| {
++        if notes.notes.is_null() {
++            return OperationStatus::OK;
++        }
++        let notes = unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(notes.notes, notes.len)) };
++        drop(notes);
++        OperationStatus::OK
++    })
+ }
+ 
+ #[repr(C)]
+@@ -751,57 +765,59 @@ pub unsafe extern "C" fn transfer_funds(
+     node: *const LogosBlockchainNode,
+     arguments: *const TransferFundsArguments,
+ ) -> FfiTransferFundsResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(arguments);
+-    let arguments = unsafe { &*arguments };
+-    unwrap_or_return_error!(unsafe { arguments.validate() });
+-
+-    let node = unsafe { &*node };
+-    let tip = if arguments.optional_tip.is_null() {
+-        unwrap_or_return_error!(get_cryptarchia_info_sync(node))
+-            .cryptarchia_info
+-            .tip
+-    } else {
+-        lb_core::header::HeaderId::from(unsafe { *arguments.optional_tip })
+-    };
+-    let change_public_key =
+-        unwrap_or_return_error!(unsafe { parse_public_key(arguments.change_public_key) });
+-    let funding_public_keys = {
+-        let funding_public_keys_pointers = unsafe {
+-            std::slice::from_raw_parts(
+-                arguments.funding_public_keys,
+-                arguments.funding_public_keys_len,
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(arguments);
++        let arguments = unsafe { &*arguments };
++        unwrap_or_return_error!(unsafe { arguments.validate() });
++
++        let node = unsafe { &*node };
++        let tip = if arguments.optional_tip.is_null() {
++            unwrap_or_return_error!(get_cryptarchia_info_sync(node))
++                .cryptarchia_info
++                .tip
++        } else {
++            lb_core::header::HeaderId::from(unsafe { *arguments.optional_tip })
++        };
++        let change_public_key =
++            unwrap_or_return_error!(unsafe { parse_public_key(arguments.change_public_key) });
++        let funding_public_keys = {
++            let funding_public_keys_pointers = unsafe {
++                std::slice::from_raw_parts(
++                    arguments.funding_public_keys,
++                    arguments.funding_public_keys_len,
++                )
++            };
++            unwrap_or_return_error!(
++                funding_public_keys_pointers
++                    .iter()
++                    .map(|funding_public_key_pointer| unsafe {
++                        parse_public_key(*funding_public_key_pointer)
++                    })
++                    .collect::<StatusResult<Vec<_>>>()
+             )
+         };
+-        unwrap_or_return_error!(
+-            funding_public_keys_pointers
+-                .iter()
+-                .map(|funding_public_key_pointer| unsafe {
+-                    parse_public_key(*funding_public_key_pointer)
+-                })
+-                .collect::<StatusResult<Vec<_>>>()
+-        )
+-    };
+-    let recipient_public_key =
+-        unwrap_or_return_error!(unsafe { parse_public_key(arguments.recipient_public_key) });
+-    let amount = Value::from(arguments.amount);
+-
+-    let transaction = unwrap_or_return_error!(transfer_funds_sync(
+-        node,
+-        tip,
+-        change_public_key,
+-        funding_public_keys,
+-        recipient_public_key,
+-        amount,
+-    ));
+-    let transaction_hash = transaction.hash().as_signing_bytes();
+-    let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
+-        return FfiTransferFundsResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "Failed to convert transaction hash to array.",
++        let recipient_public_key =
++            unwrap_or_return_error!(unsafe { parse_public_key(arguments.recipient_public_key) });
++        let amount = Value::from(arguments.amount);
++
++        let transaction = unwrap_or_return_error!(transfer_funds_sync(
++            node,
++            tip,
++            change_public_key,
++            funding_public_keys,
++            recipient_public_key,
++            amount,
+         ));
+-    };
+-    FfiTransferFundsResult::ok(transaction_hash_array)
++        let transaction_hash = transaction.hash().as_signing_bytes();
++        let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
++            return FfiTransferFundsResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                "Failed to convert transaction hash to array.",
++            ));
++        };
++        FfiTransferFundsResult::ok(transaction_hash_array)
++    })
+ }
+ 
+ /// Parses a 32-byte little-endian buffer into a [`ZkPublicKey`].
+@@ -1039,104 +1055,108 @@ pub unsafe extern "C" fn channel_deposit_with_notes(
+     node: *const LogosBlockchainNode,
+     arguments: *const ChannelDepositWithNotesArguments,
+ ) -> FfiChannelDepositResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(arguments);
+-    let arguments = unsafe { &*arguments };
+-    unwrap_or_return_error!(unsafe { arguments.validate() });
+-
+-    let node = unsafe { &*node };
+-    let tip = if arguments.optional_tip.is_null() {
+-        unwrap_or_return_error!(get_cryptarchia_info_sync(node))
+-            .cryptarchia_info
+-            .tip
+-    } else {
+-        CoreHeaderId::from(unsafe { *arguments.optional_tip })
+-    };
+-
+-    let channel_id = {
+-        let bytes = unsafe { std::slice::from_raw_parts(arguments.channel_id, 32) };
+-        let Ok(array): Result<[u8; 32], _> = bytes.try_into() else {
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(arguments);
++        let arguments = unsafe { &*arguments };
++        unwrap_or_return_error!(unsafe { arguments.validate() });
++
++        let node = unsafe { &*node };
++        let tip = if arguments.optional_tip.is_null() {
++            unwrap_or_return_error!(get_cryptarchia_info_sync(node))
++                .cryptarchia_info
++                .tip
++        } else {
++            CoreHeaderId::from(unsafe { *arguments.optional_tip })
++        };
++
++        let channel_id = {
++            let bytes = unsafe { std::slice::from_raw_parts(arguments.channel_id, 32) };
++            let Ok(array): Result<[u8; 32], _> = bytes.try_into() else {
++                return FfiChannelDepositResult::err(OperationStatus::error(
++                    OperationStatusCode::RuntimeError,
++                    "Invalid channel_id length.",
++                ));
++            };
++            ChannelId::from(array)
++        };
++
++        let input_note_ids = unsafe {
++            std::slice::from_raw_parts(arguments.input_note_ids, arguments.input_note_ids_len)
++        };
++        let mut note_ids = Vec::with_capacity(arguments.input_note_ids_len);
++        for note_id_bytes in input_note_ids {
++            let note_id =
++                unwrap_or_return_error!(fr_from_bytes(note_id_bytes).map(CoreNoteId).map_err(
++                    |error| {
++                        OperationStatus::error(
++                            OperationStatusCode::DynError,
++                            format!("Invalid note ID: {error:?}"),
++                        )
++                    }
++                ));
++            note_ids.push(note_id);
++        }
++        let inputs = unwrap_or_return_error!(Inputs::try_new(note_ids).map_err(|error| {
++            OperationStatus::error(
++                OperationStatusCode::DynError,
++                format!("Invalid deposit inputs: {error:?}"),
++            )
++        }));
++
++        let metadata_bytes = if arguments.metadata_len == 0 {
++            Vec::new()
++        } else {
++            unsafe { std::slice::from_raw_parts(arguments.metadata, arguments.metadata_len) }
++                .to_vec()
++        };
++        let metadata =
++            unwrap_or_return_error!(Metadata::try_from(metadata_bytes).map_err(|error| {
++                OperationStatus::error(
++                    OperationStatusCode::DynError,
++                    format!("Invalid metadata: {error:?}"),
++                )
++            }));
++
++        let deposit = DepositOp {
++            channel_id,
++            inputs,
++            metadata,
++        };
++
++        let change_public_key =
++            unwrap_or_return_error!(unsafe { parse_public_key(arguments.change_public_key) });
++        let funding_public_key_pointers = unsafe {
++            std::slice::from_raw_parts(
++                arguments.funding_public_keys,
++                arguments.funding_public_keys_len,
++            )
++        };
++        let funding_public_keys = unwrap_or_return_error!(
++            funding_public_key_pointers
++                .iter()
++                .map(|pointer| unsafe { parse_public_key(*pointer) })
++                .collect::<StatusResult<Vec<_>>>()
++        );
++        let max_tx_fee = GasCost::new(arguments.max_tx_fee);
++
++        let transaction = unwrap_or_return_error!(channel_deposit_with_notes_sync(
++            node,
++            tip,
++            deposit,
++            change_public_key,
++            funding_public_keys,
++            max_tx_fee,
++        ));
++        let transaction_hash = transaction.hash().as_signing_bytes();
++        let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
+             return FfiChannelDepositResult::err(OperationStatus::error(
+                 OperationStatusCode::RuntimeError,
+-                "Invalid channel_id length.",
++                "Failed to convert transaction hash to array.",
+             ));
+         };
+-        ChannelId::from(array)
+-    };
+-
+-    let input_note_ids = unsafe {
+-        std::slice::from_raw_parts(arguments.input_note_ids, arguments.input_note_ids_len)
+-    };
+-    let mut note_ids = Vec::with_capacity(arguments.input_note_ids_len);
+-    for note_id_bytes in input_note_ids {
+-        let note_id =
+-            unwrap_or_return_error!(fr_from_bytes(note_id_bytes).map(CoreNoteId).map_err(
+-                |error| {
+-                    OperationStatus::error(
+-                        OperationStatusCode::DynError,
+-                        format!("Invalid note ID: {error:?}"),
+-                    )
+-                }
+-            ));
+-        note_ids.push(note_id);
+-    }
+-    let inputs = unwrap_or_return_error!(Inputs::try_new(note_ids).map_err(|error| {
+-        OperationStatus::error(
+-            OperationStatusCode::DynError,
+-            format!("Invalid deposit inputs: {error:?}"),
+-        )
+-    }));
+-
+-    let metadata_bytes = if arguments.metadata_len == 0 {
+-        Vec::new()
+-    } else {
+-        unsafe { std::slice::from_raw_parts(arguments.metadata, arguments.metadata_len) }.to_vec()
+-    };
+-    let metadata = unwrap_or_return_error!(Metadata::try_from(metadata_bytes).map_err(|error| {
+-        OperationStatus::error(
+-            OperationStatusCode::DynError,
+-            format!("Invalid metadata: {error:?}"),
+-        )
+-    }));
+-
+-    let deposit = DepositOp {
+-        channel_id,
+-        inputs,
+-        metadata,
+-    };
+-
+-    let change_public_key =
+-        unwrap_or_return_error!(unsafe { parse_public_key(arguments.change_public_key) });
+-    let funding_public_key_pointers = unsafe {
+-        std::slice::from_raw_parts(
+-            arguments.funding_public_keys,
+-            arguments.funding_public_keys_len,
+-        )
+-    };
+-    let funding_public_keys = unwrap_or_return_error!(
+-        funding_public_key_pointers
+-            .iter()
+-            .map(|pointer| unsafe { parse_public_key(*pointer) })
+-            .collect::<StatusResult<Vec<_>>>()
+-    );
+-    let max_tx_fee = GasCost::new(arguments.max_tx_fee);
+-
+-    let transaction = unwrap_or_return_error!(channel_deposit_with_notes_sync(
+-        node,
+-        tip,
+-        deposit,
+-        change_public_key,
+-        funding_public_keys,
+-        max_tx_fee,
+-    ));
+-    let transaction_hash = transaction.hash().as_signing_bytes();
+-    let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
+-        return FfiChannelDepositResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "Failed to convert transaction hash to array.",
+-        ));
+-    };
+-    FfiChannelDepositResult::ok(transaction_hash_array)
++        FfiChannelDepositResult::ok(transaction_hash_array)
++    })
+ }
+ 
+ /// Selects notes (largest-first) whose combined value covers `amount`.
+@@ -1393,62 +1413,66 @@ pub unsafe extern "C" fn channel_deposit(
+     node: *const LogosBlockchainNode,
+     arguments: *const ChannelDepositArguments,
+ ) -> FfiChannelDepositResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(arguments);
+-    let arguments = unsafe { &*arguments };
+-    unwrap_or_return_error!(unsafe { arguments.validate() });
+-
+-    let node = unsafe { &*node };
+-    let tip = if arguments.optional_tip.is_null() {
+-        unwrap_or_return_error!(get_cryptarchia_info_sync(node))
+-            .cryptarchia_info
+-            .tip
+-    } else {
+-        lb_core::header::HeaderId::from(unsafe { *arguments.optional_tip })
+-    };
+-
+-    let channel_id = {
+-        let bytes = unsafe { std::slice::from_raw_parts(arguments.channel_id, 32) };
+-        let Ok(array): Result<[u8; 32], _> = bytes.try_into() else {
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(arguments);
++        let arguments = unsafe { &*arguments };
++        unwrap_or_return_error!(unsafe { arguments.validate() });
++
++        let node = unsafe { &*node };
++        let tip = if arguments.optional_tip.is_null() {
++            unwrap_or_return_error!(get_cryptarchia_info_sync(node))
++                .cryptarchia_info
++                .tip
++        } else {
++            lb_core::header::HeaderId::from(unsafe { *arguments.optional_tip })
++        };
++
++        let channel_id = {
++            let bytes = unsafe { std::slice::from_raw_parts(arguments.channel_id, 32) };
++            let Ok(array): Result<[u8; 32], _> = bytes.try_into() else {
++                return FfiChannelDepositResult::err(OperationStatus::error(
++                    OperationStatusCode::RuntimeError,
++                    "Invalid channel_id length.",
++                ));
++            };
++            ChannelId::from(array)
++        };
++        let funding_public_key =
++            unwrap_or_return_error!(unsafe { parse_public_key(arguments.funding_public_key) });
++        let amount = Value::from(arguments.amount);
++
++        let metadata_bytes = if arguments.metadata_len == 0 {
++            Vec::new()
++        } else {
++            unsafe { std::slice::from_raw_parts(arguments.metadata, arguments.metadata_len) }
++                .to_vec()
++        };
++        let metadata =
++            unwrap_or_return_error!(Metadata::try_from(metadata_bytes).map_err(|error| {
++                OperationStatus::error(
++                    OperationStatusCode::DynError,
++                    format!("Invalid metadata: {error:?}"),
++                )
++            }));
++
++        let transaction = unwrap_or_return_error!(channel_deposit_sync(
++            node,
++            tip,
++            channel_id,
++            funding_public_key,
++            amount,
++            metadata,
++        ));
++        let transaction_hash = transaction.hash().as_signing_bytes();
++        let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
+             return FfiChannelDepositResult::err(OperationStatus::error(
+                 OperationStatusCode::RuntimeError,
+-                "Invalid channel_id length.",
++                "Failed to convert transaction hash to array.",
+             ));
+         };
+-        ChannelId::from(array)
+-    };
+-    let funding_public_key =
+-        unwrap_or_return_error!(unsafe { parse_public_key(arguments.funding_public_key) });
+-    let amount = Value::from(arguments.amount);
+-
+-    let metadata_bytes = if arguments.metadata_len == 0 {
+-        Vec::new()
+-    } else {
+-        unsafe { std::slice::from_raw_parts(arguments.metadata, arguments.metadata_len) }.to_vec()
+-    };
+-    let metadata = unwrap_or_return_error!(Metadata::try_from(metadata_bytes).map_err(|error| {
+-        OperationStatus::error(
+-            OperationStatusCode::DynError,
+-            format!("Invalid metadata: {error:?}"),
+-        )
+-    }));
+-
+-    let transaction = unwrap_or_return_error!(channel_deposit_sync(
+-        node,
+-        tip,
+-        channel_id,
+-        funding_public_key,
+-        amount,
+-        metadata,
+-    ));
+-    let transaction_hash = transaction.hash().as_signing_bytes();
+-    let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
+-        return FfiChannelDepositResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "Failed to convert transaction hash to array.",
+-        ));
+-    };
+-    FfiChannelDepositResult::ok(transaction_hash_array)
++        FfiChannelDepositResult::ok(transaction_hash_array)
++    })
+ }
+ 
+ /// Funds a transaction from the node's wallet.
+@@ -1587,47 +1611,49 @@ pub unsafe extern "C" fn wallet_fund_tx(
+     node: *const LogosBlockchainNode,
+     request_json: *const c_char,
+ ) -> FfiWalletFundResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(request_json);
+-    let node = unsafe { &*node };
+-
+-    let request_json = match unsafe { CStr::from_ptr(request_json) }.to_str() {
+-        Ok(request_json) => request_json,
+-        Err(error) => {
+-            return FfiWalletFundResult::err(OperationStatus::error(
+-                OperationStatusCode::ValidationError,
+-                format!("Request is not valid UTF-8: {error}"),
+-            ));
+-        }
+-    };
+-    let request: WalletFundRequestBody = match serde_json::from_str(request_json) {
+-        Ok(request) => request,
+-        Err(error) => {
+-            return FfiWalletFundResult::err(OperationStatus::error(
+-                OperationStatusCode::ValidationError,
+-                format!("Failed to parse fund request: {error}"),
+-            ));
+-        }
+-    };
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(request_json);
++        let node = unsafe { &*node };
++
++        let request_json = match unsafe { CStr::from_ptr(request_json) }.to_str() {
++            Ok(request_json) => request_json,
++            Err(error) => {
++                return FfiWalletFundResult::err(OperationStatus::error(
++                    OperationStatusCode::ValidationError,
++                    format!("Request is not valid UTF-8: {error}"),
++                ));
++            }
++        };
++        let request: WalletFundRequestBody = match serde_json::from_str(request_json) {
++            Ok(request) => request,
++            Err(error) => {
++                return FfiWalletFundResult::err(OperationStatus::error(
++                    OperationStatusCode::ValidationError,
++                    format!("Failed to parse fund request: {error}"),
++                ));
++            }
++        };
+ 
+-    let response = unwrap_or_return_error!(wallet_fund_tx_sync(node, request));
++        let response = unwrap_or_return_error!(wallet_fund_tx_sync(node, request));
+ 
+-    let response_json = match serde_json::to_string(&response) {
+-        Ok(response_json) => response_json,
+-        Err(error) => {
+-            return FfiWalletFundResult::err(OperationStatus::error(
++        let response_json = match serde_json::to_string(&response) {
++            Ok(response_json) => response_json,
++            Err(error) => {
++                return FfiWalletFundResult::err(OperationStatus::error(
++                    OperationStatusCode::RuntimeError,
++                    format!("Failed to serialize fund response: {error}"),
++                ));
++            }
++        };
++        match CString::new(response_json) {
++            Ok(response_json) => FfiWalletFundResult::ok(response_json.into_raw()),
++            Err(error) => FfiWalletFundResult::err(OperationStatus::error(
+                 OperationStatusCode::RuntimeError,
+-                format!("Failed to serialize fund response: {error}"),
+-            ));
++                format!("Failed to create response CString: {error}"),
++            )),
+         }
+-    };
+-    match CString::new(response_json) {
+-        Ok(response_json) => FfiWalletFundResult::ok(response_json.into_raw()),
+-        Err(error) => FfiWalletFundResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            format!("Failed to create response CString: {error}"),
+-        )),
+-    }
++    })
+ }
+ 
+ pub type FfiSubmitTransactionResult = FfiStatusResult<Hash>;
+@@ -1659,58 +1685,60 @@ pub unsafe extern "C" fn submit_signed_transaction(
+     node: *const LogosBlockchainNode,
+     signed_tx_json: *const c_char,
+ ) -> FfiSubmitTransactionResult {
+-    return_error_if_null_pointer!(node);
+-    return_error_if_null_pointer!(signed_tx_json);
+-    let node = unsafe { &*node };
+-
+-    let preverified_tx = {
+-        let signed_tx_json = match unsafe { CStr::from_ptr(signed_tx_json) }.to_str() {
+-            Ok(signed_tx_json) => signed_tx_json,
+-            Err(error) => {
+-                return FfiSubmitTransactionResult::err(OperationStatus::error(
+-                    OperationStatusCode::ValidationError,
+-                    format!("Transaction is not valid UTF-8: {error}"),
+-                ));
+-            }
+-        };
+-        let signed_tx: SignedOps<Unverified, StandardMode> =
+-            match serde_json::from_str(signed_tx_json) {
+-                Ok(signed_tx) => signed_tx,
++    crate::macros::catch_panics(|| {
++        return_error_if_null_pointer!(node);
++        return_error_if_null_pointer!(signed_tx_json);
++        let node = unsafe { &*node };
++
++        let preverified_tx = {
++            let signed_tx_json = match unsafe { CStr::from_ptr(signed_tx_json) }.to_str() {
++                Ok(signed_tx_json) => signed_tx_json,
+                 Err(error) => {
+                     return FfiSubmitTransactionResult::err(OperationStatus::error(
+                         OperationStatusCode::ValidationError,
+-                        format!("Failed to parse signed transaction: {error}"),
++                        format!("Transaction is not valid UTF-8: {error}"),
+                     ));
+                 }
+             };
+-        match signed_tx.preverify() {
+-            Ok(preverified_tx) => preverified_tx,
+-            Err(error) => {
+-                return FfiSubmitTransactionResult::err(OperationStatus::error(
+-                    OperationStatusCode::ValidationError,
+-                    format!("Failed to preverify signed transaction: {error}"),
+-                ));
++            let signed_tx: SignedOps<Unverified, StandardMode> =
++                match serde_json::from_str(signed_tx_json) {
++                    Ok(signed_tx) => signed_tx,
++                    Err(error) => {
++                        return FfiSubmitTransactionResult::err(OperationStatus::error(
++                            OperationStatusCode::ValidationError,
++                            format!("Failed to parse signed transaction: {error}"),
++                        ));
++                    }
++                };
++            match signed_tx.preverify() {
++                Ok(preverified_tx) => preverified_tx,
++                Err(error) => {
++                    return FfiSubmitTransactionResult::err(OperationStatus::error(
++                        OperationStatusCode::ValidationError,
++                        format!("Failed to preverify signed transaction: {error}"),
++                    ));
++                }
+             }
+-        }
+-    };
++        };
+ 
+-    let transaction_hash = preverified_tx.hash().as_signing_bytes();
+-    let runtime_handle = node.get_runtime_handle();
+-    let submit_result = runtime_handle.block_on(async {
+-        mempool::add_tx(node.get_overwatch_handle(), preverified_tx, Hashable::hash).await
+-    });
+-    if let Err(error) = submit_result {
+-        return FfiSubmitTransactionResult::err(OperationStatus::error(
+-            OperationStatusCode::DynError,
+-            format!("Failed to add transaction to mempool: {error}"),
+-        ));
+-    }
++        let transaction_hash = preverified_tx.hash().as_signing_bytes();
++        let runtime_handle = node.get_runtime_handle();
++        let submit_result = runtime_handle.block_on(async {
++            mempool::add_tx(node.get_overwatch_handle(), preverified_tx, Hashable::hash).await
++        });
++        if let Err(error) = submit_result {
++            return FfiSubmitTransactionResult::err(OperationStatus::error(
++                OperationStatusCode::DynError,
++                format!("Failed to add transaction to mempool: {error}"),
++            ));
++        }
+ 
+-    let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
+-        return FfiSubmitTransactionResult::err(OperationStatus::error(
+-            OperationStatusCode::RuntimeError,
+-            "Failed to convert transaction hash to array.",
+-        ));
+-    };
+-    FfiSubmitTransactionResult::ok(transaction_hash_array)
++        let Ok(transaction_hash_array) = transaction_hash.iter().as_slice().try_into() else {
++            return FfiSubmitTransactionResult::err(OperationStatus::error(
++                OperationStatusCode::RuntimeError,
++                "Failed to convert transaction hash to array.",
++            ));
++        };
++        FfiSubmitTransactionResult::ok(transaction_hash_array)
++    })
+ }
+diff --git a/c-bindings/src/errors.rs b/c-bindings/src/errors.rs
+index 80065e4ea..14a89e219 100644
+--- a/c-bindings/src/errors.rs
++++ b/c-bindings/src/errors.rs
+@@ -1,4 +1,7 @@
+-use std::ffi::{CStr, CString, c_char};
++use std::{
++    any::Any,
++    ffi::{CStr, CString, c_char},
++};
+ 
+ #[derive(Default, PartialEq, Eq, Debug)]
+ #[repr(C)]
+@@ -39,11 +42,31 @@ impl OperationStatus {
+ 
+     pub(crate) fn error(code: OperationStatusCode, message: impl Into<String>) -> Self {
+         let message = CString::new(message.into())
+-            .expect("Message contained an interior NUL byte.")
++            .unwrap_or_else(|error| {
++                // Messages echo file and host content (YAML values, paths),
++                // which can contain a NUL byte that no C string can carry.
++                // This runs on the error path of every exported function, so
++                // it must not panic: escape the NULs and keep the message.
++                let escaped = String::from_utf8_lossy(&error.into_vec()).replace('\0', "\\0");
++                CString::new(escaped).unwrap_or_default()
++            })
+             .into_raw();
+         Self { code, message }
+     }
+ 
++    /// Builds the status reported when a panic is caught at an FFI boundary.
++    pub(crate) fn from_panic(payload: Box<dyn Any + Send>) -> Self {
++        let message = payload
++            .downcast_ref::<&str>()
++            .map(|message| (*message).to_owned())
++            .or_else(|| payload.downcast_ref::<String>().cloned())
++            .unwrap_or_else(|| "non-string panic payload".to_owned());
++        Self::error(
++            OperationStatusCode::RuntimeError,
++            format!("Panic caught at the FFI boundary: {message}"),
++        )
++    }
++
+     #[must_use]
+     #[unsafe(no_mangle)]
+     pub extern "C" fn is_ok(&self) -> bool {
+@@ -70,3 +93,42 @@ impl std::fmt::Debug for OperationStatus {
+             .finish()
+     }
+ }
++
++#[cfg(test)]
++mod test {
++    use super::*;
++
++    fn message_of(status: &OperationStatus) -> String {
++        unsafe { CStr::from_ptr(status.message) }
++            .to_string_lossy()
++            .into_owned()
++    }
++
++    /// LB-002: an error message carrying an interior NUL used to panic inside
++    /// `OperationStatus::error`, on the error path of every exported function.
++    #[test]
++    fn error_with_interior_nul_does_not_panic() {
++        let status = OperationStatus::error(
++            OperationStatusCode::ConfigurationError,
++            "unknown variant `Sim\0ple`, expected `Simple`",
++        );
++        assert!(status.is_error());
++        assert_eq!(
++            message_of(&status),
++            "unknown variant `Sim\\0ple`, expected `Simple`"
++        );
++        assert!(unsafe { crate::api::free_cstring(status.message) }.is_ok());
++    }
++
++    #[test]
++    fn from_panic_reports_a_runtime_error_with_the_payload() {
++        let payload: Box<dyn Any + Send> = Box::new(String::from("boom"));
++        let status = OperationStatus::from_panic(payload);
++        assert_eq!(status.code, OperationStatusCode::RuntimeError);
++        assert_eq!(
++            message_of(&status),
++            "Panic caught at the FFI boundary: boom"
++        );
++        assert!(unsafe { crate::api::free_cstring(status.message) }.is_ok());
++    }
++}
+diff --git a/c-bindings/src/macros.rs b/c-bindings/src/macros.rs
+index f643e7bfe..d12cc409d 100644
+--- a/c-bindings/src/macros.rs
++++ b/c-bindings/src/macros.rs
+@@ -1,3 +1,5 @@
++use std::panic::{AssertUnwindSafe, catch_unwind};
++
+ use crate::{errors::OperationStatus, result::FfiResult};
+ 
+ /// Checks if a pointer is null and returns from the calling function with a
+@@ -70,3 +72,22 @@ impl FfiReturn for OperationStatus {
+ impl FfiReturn for () {
+     fn from_operation_status(_status: OperationStatus) -> Self {}
+ }
++
++/// Runs the body of an exported function behind a panic barrier.
++///
++/// Every `extern "C"` function of this crate is a boundary that C code calls
++/// into. A panic that reaches such a boundary cannot unwind into C, so the
++/// compiler aborts the whole host process instead. This helper catches the
++/// panic and reports it as an
++/// [`OperationStatusCode::RuntimeError`](crate::errors::OperationStatusCode::RuntimeError)
++/// status, which is what an embedder expects from a library call that failed.
++///
++/// `AssertUnwindSafe` is sound here: the closure only captures the raw
++/// arguments the host passed in, and nothing of this crate's state is left
++/// half-updated by a panic that the caller could observe afterwards.
++pub(crate) fn catch_panics<Return: FfiReturn>(body: impl FnOnce() -> Return) -> Return {
++    match catch_unwind(AssertUnwindSafe(body)) {
++        Ok(value) => value,
++        Err(payload) => Return::from_operation_status(OperationStatus::from_panic(payload)),
++    }
++}
+diff --git a/c-bindings/src/node.rs b/c-bindings/src/node.rs
+index a89426ee7..2191df485 100644
+--- a/c-bindings/src/node.rs
++++ b/c-bindings/src/node.rs
+@@ -147,3 +147,36 @@ impl Drop for LogosBlockchainNode {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod test {
++    use super::*;
++    use crate::api::cryptarchia::get_cryptarchia_info;
++
++    /// LB-002 regression: a panic raised behind an exported function must come
++    /// back to the host as an error status instead of aborting the process.
++    ///
++    /// The panic is injected through a handle whose inner pointers are null,
++    /// which trips the `expect` in `get_runtime_handle`. Before the panic
++    /// barrier this test aborted the whole test binary.
++    #[test]
++    fn panic_behind_an_entry_point_is_reported_as_a_runtime_error() {
++        // Never dropped: `Drop` would `Box::from_raw` the null pointers.
++        let node = ManuallyDrop::new(LogosBlockchainNode {
++            overwatch: ptr::null_mut(),
++            runtime: ptr::null_mut(),
++            chain_id: ptr::null_mut(),
++        });
++
++        let result = unsafe { get_cryptarchia_info(&*node) };
++
++        assert_eq!(result.error.code, OperationStatusCode::RuntimeError);
++        assert!(result.value.is_null());
++        let message = unsafe { CStr::from_ptr(result.error.message) }.to_string_lossy();
++        assert!(
++            message.starts_with("Panic caught at the FFI boundary: "),
++            "unexpected message: {message}"
++        );
++        assert!(unsafe { crate::api::free_cstring(result.error.message) }.is_ok());
++    }
++}
+diff --git a/nodes/node/binary/src/lib.rs b/nodes/node/binary/src/lib.rs
+index 681e13f8f..61baddef6 100644
+--- a/nodes/node/binary/src/lib.rs
++++ b/nodes/node/binary/src/lib.rs
+@@ -7,8 +7,6 @@ pub mod version;
+ 
+ pub mod global_allocators;
+ 
+-use std::panic::set_hook;
+-
+ use color_eyre::eyre::{Result, eyre};
+ pub use lb_blend_service::core::backends::libp2p::Libp2pBlendBackend as BlendBackend;
+ use lb_core::mantle::{ledger::verification_mode::StandardMode, transactions::states::Preverified};
+@@ -51,7 +49,6 @@ use crate::{
+         wallet::ServiceConfig as WalletConfig,
+     },
+     generic_services::{SdpMempoolAdapter, SdpRecoveryBackend, SdpService, SdpWalletAdapter},
+-    panic::log_and_exit_hook,
+ };
+ pub use crate::{
+     cli::Command,
+@@ -223,8 +220,6 @@ pub fn run_node_from_config(
+ 
+     let http_config = api_config.backend_settings();
+ 
+-    set_hook(Box::new(log_and_exit_hook));
+-
+     let app = OverwatchRunner::<LogosBlockchain>::run(
+         LogosBlockchainServiceSettings {
+             network: network_service_config,
+diff --git a/nodes/node/binary/src/main.rs b/nodes/node/binary/src/main.rs
+index 748499595..e55fb9b17 100644
+--- a/nodes/node/binary/src/main.rs
++++ b/nodes/node/binary/src/main.rs
+@@ -5,7 +5,9 @@ use logos_blockchain_node::{
+     UserConfig,
+     cli::{CliArgs, Command, build_run_config},
+     config::deployment::DeploymentSettings,
+-    get_services_to_start, run_node_from_config,
++    get_services_to_start,
++    panic::log_and_exit_hook,
++    run_node_from_config,
+ };
+ 
+ #[tokio::main]
+@@ -86,6 +88,11 @@ async fn main() -> Result<()> {
+         build_run_config(user_config, cli_args)?
+     };
+ 
++    // The binary owns the process, so a panic anywhere in it ends the process.
++    // Installed here rather than in `run_node_from_config`: a library that
++    // embeds the node (the C bindings) must not replace the host's panic hook.
++    std::panic::set_hook(Box::new(log_and_exit_hook));
++
+     let app = run_node_from_config(run_config, None)
+         .map_err(|e| eyre!("{e}"))
+         .inspect_err(|e| {
