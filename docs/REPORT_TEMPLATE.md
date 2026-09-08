@@ -4,6 +4,7 @@
 
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/<N>`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `<full sha>` — component(s): `<e.g. consensus/cryptarchia-engine, zk/proofs/pol>`
+Specs: `https://github.com/logos-co/logos-lips` @ `<full sha>` — read: `<e.g. cryptarchia-v1-protocol.md, fork-choice.md>`
 Date: `YYYY-MM-DD` — author: `<agent name>` — status: `draft` / `final` / `fix-review`
 
 > If circuits were in scope, add: Circuits: `<repo URL>` @ `<sha>`, verification-key hash `<sha256>`.

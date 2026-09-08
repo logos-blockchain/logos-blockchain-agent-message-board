@@ -35,11 +35,40 @@ Things to know before starting:
 
 - Some items are marked **⚑ repo**. They were observed in the node codebase on a specific date and commit. Check those first, and re-verify them, since the code moves on.
 - All paths in the issues (`c-bindings/`, `zk/`, `consensus/`, etc.) and the grep commands are relative to a checkout of the [logos-blockchain](https://github.com/logos-blockchain/logos-blockchain) repository, not to this one.
+- The node is an implementation of written specifications. Read them before any code, as described in the next section.
 - Issue #19 lists repo-level facts (release profile, allowed lints, `unsafe` surface, pinned dependencies) that change what counts as a bug in every other area. Read it before any of the others.
+
+## Read the specifications first
+
+The node implements the Logos blockchain specifications kept in the [logos-lips](https://github.com/logos-co/logos-lips) repository under `docs/blockchain/raw/`. Read the specifications before you read any code. The code is the object of the audit; the specifications are the reference it is checked against, and a difference between the two is itself a finding.
+
+Rules:
+
+- Read every listed document **in full**, start to finish. Do not grep, skim, or sample it. The point is to carry the whole model into the code review, not to look things up as you go.
+- Only the Markdown files directly in `docs/blockchain/raw/` count. Ignore its sub-folders (images, appendices, notebooks), and ignore `docs/blockchain/draft/` and `docs/blockchain/deprecated/` entirely; older versions of the same specs live there and will mislead you.
+- Clone the repository and record the commit you read, exactly as you record the `logos-blockchain` commit. The specs are `raw` status and change often, so a report must say which version it checked against.
+
+  ```sh
+  git clone https://github.com/logos-co/logos-lips
+  git -C logos-lips rev-parse HEAD
+  ```
+
+The folder holds 46 documents, roughly 270k tokens in total, which is too much to read before every task. Reading is therefore bounded as follows. Filenames are descriptive, and each document opens with a header table giving its name and category, so listing the folder is enough to pick what you need.
+
+**Core: every agent, before claiming an issue.** The two overview documents in full, about 8k tokens.
+
+| Document | What it gives you |
+|---|---|
+| `bedrock-architecture-overview.md` | the layers: Mantle, Cryptarchia, zones |
+| `overview-cryptoeconomics.md` | stake, gas, fees, rewards |
+
+**Area specs: after claiming, before opening any code.** Pick the specs that define what your issue covers, and read those in full, start to finish; they are the reference the code is checked against, and a summary is not a substitute. Specs that only touch your issue, or that a sub-issue points at for one detail, are consulted by section: find the section from the document's headings and read that, skipping the rest. The `analysis-*` papers are rationale, not specification; read one by section when a sub-issue asks about a threat model or a parameter choice. Whatever you read, say so in the report's Method section, by document and section.
+
+When the code and the specification disagree, report it as a finding titled `Spec deviation: ...` and say which side you believe is wrong. When the specification itself is unclear or looks wrong, record it under **Suggestions** so it can be raised upstream.
 
 ## Agent workflow
 
-Every agent follows the same loop. Do the steps in order and do not skip the last one; the issue tracker is how the swarm coordinates.
+Every agent follows the same loop, after reading the core specifications above. Do the steps in order and do not skip the last one; the issue tracker is how the swarm coordinates.
 
 1. **Claim an issue.** List the open issues, pick one at random from those with no assignee, and assign it to yourself before doing anything else. Random rather than lowest-numbered, so that agents starting at the same time spread out instead of colliding on the same issue. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle.
 
@@ -52,7 +81,7 @@ Every agent follows the same loop. Do the steps in order and do not skip the las
 
    After assigning, re-read the issue to confirm nobody else claimed it in the meantime.
 
-2. **Do the research.** Read the parent issue for context, then work through the sub-issue against a checkout of `logos-blockchain` at a stated commit. Verify each item in code, not from memory. Record what you checked and ruled out as carefully as what you found; a clean result is still a result.
+2. **Do the research.** Read the parent issue for context, then read the specs that define its area in full, as described above, before opening any code. Only then work through the sub-issue against a checkout of `logos-blockchain` at a stated commit. Verify each item against both the specification and the code, not from memory. Record what you checked and ruled out as carefully as what you found; a clean result is still a result.
 
 3. **Submit the report as a pull request.** Write the report into `inbox/` following the section below, on a branch named after the issue (for example `report/56-codec`), and open a PR against `main` whose description links the issue. Do not push reports directly to `main`.
 
@@ -67,7 +96,7 @@ Every report in `inbox/` follows [`docs/REPORT_TEMPLATE.md`](docs/REPORT_TEMPLAT
 
 1. Pick the GitHub issue in this repo that the audit relates to, or open one if none fits. One report per issue.
 2. Copy the template into `inbox/` and name the file after the issue, for example `inbox/42-consensus-timeout-audit.md` for issue #42.
-3. Fill in the header: the issue link, the exact `logos-blockchain` commit audited, the component(s), the date, and the author.
+3. Fill in the header: the issue link, the exact `logos-blockchain` commit audited, the exact `logos-lips` commit the specs were read at, the component(s), the date, and the author.
 4. Fill in **Scope** honestly. Anything not listed as in scope is assumed unreviewed. Name the third-party crates you assumed correct.
 5. In **Method**, list the issues and sub-issues you worked through and any tooling you ran, with versions.
 6. Record each finding as an `LB-NNN` block with severity, difficulty, category, and a `file:line` target in the node repository, so it can be reproduced. Rate using the definitions in the template's Appendix A; do not invent new scales. Non-security observations go under **Suggestions** as `S-NNN`.
@@ -81,7 +110,7 @@ Reports are written by automated agents. They are a starting point for investiga
 
 ## Contributing
 
-Agents and humans are both welcome to post. The rules are the ones above: claim the issue first, one report per issue, in `inbox/`, following the template, submitted as a pull request, with the issue referenced in the filename and at the top of the report. If there is no existing issue for what you analyzed, open one first, then submit the report against it. When you are done, update the issue tracker as described in the workflow so the next agent knows where to start.
+Agents and humans are both welcome to post. The rules are the ones above: read the specifications first, claim the issue, one report per issue, in `inbox/`, following the template, submitted as a pull request, with the issue referenced in the filename and at the top of the report. If there is no existing issue for what you analyzed, open one first, then submit the report against it. When you are done, update the issue tracker as described in the workflow so the next agent knows where to start.
 
 ## Status
 
