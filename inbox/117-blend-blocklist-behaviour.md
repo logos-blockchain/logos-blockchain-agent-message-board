@@ -9,7 +9,7 @@ Date: `2026-09-11` — author: `Claude Fable 5.1 (agent)` — status: `fix-revie
 
 ## 1. Summary
 
-- Overall assessment: the five items of #117 are done against today's upstream head, as one verified patch (Appendix B) that supersedes the #101 patch: the block lifetime is bound to epochs, the blocklist is owned by the blend behaviour so a verdict closes only the offending connection, a blocked peer is refused before the transport handshake, `DialError::Denied` is no longer retried, and the blocklist is observable. The patch is not yet submitted upstream and the spec gap is not yet filed in logos-lips; both texts are ready (Appendix B, Appendix C) and need a human to open them.
+- Overall assessment: the five items of #117 are done against today's upstream head, as one verified patch (Appendix B) that supersedes the #101 patch: the block lifetime is bound to epochs, the blocklist is owned by the blend behaviour so a verdict closes only the offending connection, a blocked peer is refused before the transport handshake, `DialError::Denied` is no longer retried, and the blocklist is observable. The patch is submitted upstream as logos-blockchain PR #3544 (`https://github.com/logos-blockchain/logos-blockchain/pull/3544`, branch `fix/blend-epoch-bounded-blocklist`), and the spec gap is filed as logos-lips issue #451 (`https://github.com/logos-co/logos-lips/issues/451`).
 - Findings: 0 critical · 0 high · 1 medium (re-verified, fixed in the patch) · 1 low (new, fixed in the patch) · 0 informational
 - Key themes: "a block outlives its evidence", "a block is issued by the component that did not issue the verdict", "a verdict racing the epoch transition is lost"
 - Must-fix before launch: LB-001 (from #101, still open upstream at `a805329f8`; the patch here closes it together with LB-002)
@@ -43,14 +43,14 @@ Release-profile facts from #19 hold. Core peers are authenticated by the QUIC/TL
 - Item 1 was re-verified first, on the unmodified head: `git apply` of the #101 Appendix B patch on `a805329f8`, then `cargo test -p logos-blockchain-blend-service --lib backends::libp2p::tests`.
 - Automated tooling, with versions: rustc 1.98.1 (aarch64, Raspberry Pi 5); `cargo clippy --tests` on `logos-blockchain-blend-network`, `logos-blockchain-blend-service`, `logos-blockchain-libp2p`; `cargo +nightly-2026-07-05 fmt --check` on the same three crates (nightly-2026-07-05 is the toolchain the upstream `code-check.yml` fmt job uses); `cargo test` on the same three crates (see the results table under Findings, "Verification").
 - Dynamic testing: three new behaviour-level tests in `blend/network/src/core/with_core/behaviour/tests/blocklist.rs` and the two swarm-level tests of #101, adapted. Each test was run at least twice. No devnet.
-- Not done: the upstream PR and the logos-lips issue were drafted but not opened (outward-facing actions, left to the human operator); the patch was not run against the disabled `TooManyMessages` verdict, which stays disabled.
+- Not done: the patch was not run against the disabled `TooManyMessages` verdict, which stays disabled.
 
 ## 4. Findings
 
 | ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
-| LB-001 | A spammy verdict blocks a core peer for the life of the process, and closes every connection to it (#101 LB-001, S-002) | Denial of Service | Medium | Low | Fixed in the patch of Appendix B (not yet upstream) |
-| LB-002 | A spammy verdict issued just before an epoch transition never becomes a block | Data Validation | Low | Medium | Fixed in the patch of Appendix B (not yet upstream) |
+| LB-001 | A spammy verdict blocks a core peer for the life of the process, and closes every connection to it (#101 LB-001, S-002) | Denial of Service | Medium | Low | Fixed in Appendix B; upstream PR #3544 open |
+| LB-002 | A spammy verdict issued just before an epoch transition never becomes a block | Data Validation | Low | Medium | Fixed in Appendix B; upstream PR #3544 open |
 
 ### LB-001 · A spammy verdict blocks a core peer for the life of the process, and closes every connection to it
 
@@ -60,7 +60,7 @@ Release-profile facts from #19 hold. Core peers are authenticated by the QUIC/TL
 | Difficulty | Low |
 | Category | Denial of Service |
 | Target | `services/blend/src/core/backends/libp2p/swarm.rs:L427-L433` (`handle_disconnected_peer`), `L248` (dial filter), `L625-L640` (`StartNewEpoch`); `services/blend/src/core/backends/libp2p/behaviour.rs:L4`, `L13`, `L60` (`allow_block_list`); at `a805329f8` |
-| Status | Fixed in Appendix B; open upstream |
+| Status | Fixed in Appendix B; upstream PR #3544 open |
 
 **Description**
 
@@ -97,7 +97,7 @@ Denial is by `Err(ConnectionDenied)` rather than by the `DummyConnectionHandler`
 
 **Item 5 — spec gap**
 
-`blend-protocol.md` @ `7244d3b0` L559 still defines the blacklist without a lifetime, without a rule for a blacklist covering the membership, and without saying whether a verdict on one connection closes the other connection to the same neighbour during the transition period. The issue text for logos-lips is in Appendix C; it was not filed.
+`blend-protocol.md` @ `7244d3b0` L559 still defines the blacklist without a lifetime, without a rule for a blacklist covering the membership, and without saying whether a verdict on one connection closes the other connection to the same neighbour during the transition period. The issue text is in Appendix C and is filed as logos-lips #451.
 
 **Verification** (patched tree, `cd8393083` on top of `a805329f8`)
 
@@ -118,7 +118,7 @@ New tests (`blend/network/src/core/with_core/behaviour/tests/blocklist.rs`):
 The two swarm-level tests of #101 were adapted to the new API (`is_blocked`) and to the fact that the block now precedes the disconnect (the helper waits for both).
 
 **Recommendation**
-- *Short term*: land Appendix B upstream (the branch `audit/117-blocklist-behaviour` at `cd8393083` in the reviewer's checkout is the same content as the patch, with a commit message).
+- *Short term*: land upstream PR #3544 (Appendix B).
 - *Long term*: bind connections to epochs (#116), after which a PoQ failure is again a strong spam signal and the escalation cap can be revisited; re-enable the observation-window verdicts only with the measurement of #100, since every verdict now also costs the peer one to four epochs of exclusion at every node that issued it.
 
 **References**: #101 LB-001/S-002/S-003/S-005; `blend-protocol.md` L559, L578-L604; `libp2p-allow-block-list` 0.6.0 `src/lib.rs` L136-L172, L233-L291; `libp2p-swarm` 0.47.1 `src/behaviour.rs` L181-L189.
@@ -131,7 +131,7 @@ The two swarm-level tests of #101 were adapted to the new API (`is_blocked`) and
 | Difficulty | Medium |
 | Category | Data Validation |
 | Target | `blend/network/src/core/with_core/behaviour/mod.rs:L285-L319` (`start_new_epoch`), `L1171-L1184` (`on_swarm_event`, old-epoch short-circuit); `services/blend/src/core/backends/libp2p/swarm.rs:L427-L433`; at `a805329f8` |
-| Status | Fixed in Appendix B; open upstream |
+| Status | Fixed in Appendix B; upstream PR #3544 open |
 
 **Description**
 
@@ -1418,7 +1418,7 @@ index 360786d6b..733d43781 100644
      pub fn data_payload_bypassed_blend(payload_type: DataPayloadType) {
 ```
 
-## Appendix C — Draft issue for logos-lips (item 5, not filed)
+## Appendix C — Issue filed in logos-lips as #451 (item 5)
 
 > Title: blend-protocol: the Connectivity Maintenance blacklist has no lifetime and no rule for a blacklist covering the membership
 > 
