@@ -11,7 +11,7 @@ The issue was filed against `a77c248f3`. Between that commit and `a805329f8` the
 
 ## 1. Summary
 
-- Overall assessment: confirmed at the ledger level. Driving the real `Rewards` state machine with `N` declared providers that each hold `Q_C` uniformly random tokens, the shipped standalone template pays the base reward to 100% of honest nodes at `N = 100`, 69% at `N = 200`, 12% at `N = 500` and 1.4% at `N = 1000` (40 simulated epochs each); the testnet template drops from 98% at `N = 1000` to 50% at `N = 2000` (10 epochs each) and, by the model the simulation confirmed, 1.7% at `N = 5000`. The collapse happens at powers of two (`N = 128`, `256`, `512`, `1024`, …) because the subtracted term `ν = ⌈log₂(N+1)⌉` steps by one bit there while `χ` is fixed by the epoch length and each step divides a token's chance by 3-5. The spec's condition `χ > ν + θ` is satisfied in every one of these cases and therefore does not protect the parameter choice. The largest network each template supports with `P(honest node paid) ≥ 0.99` is `N = 127` (standalone) and `N = 878` (testnet). When no submitted token clears the threshold, the epoch's blend income is discarded: it is neither carried into the next epoch nor returned to any pool (established by code reading; the simulated network sizes never produced such an epoch), and the spec does not define this case.
+- Overall assessment: confirmed at the ledger level. Driving the real `Rewards` state machine with `N` declared providers that each hold `Q_C` uniformly random tokens, the shipped standalone template pays the base reward to 100% of honest nodes at `N = 100`, 69% at `N = 200`, 12% at `N = 500` and 1.4% at `N = 1000` (40 simulated epochs each); the testnet template drops from 98% at `N = 1000` to 50% at `N = 2000` and 1.7% at `N = 5000` (10 epochs each). The collapse happens at powers of two (`N = 128`, `256`, `512`, `1024`, …) because the subtracted term `ν = ⌈log₂(N+1)⌉` steps by one bit there while `χ` is fixed by the epoch length and each step divides a token's chance by 3-5. The spec's condition `χ > ν + θ` is satisfied in every one of these cases and therefore does not protect the parameter choice. The largest network each template supports with `P(honest node paid) ≥ 0.99` is `N = 127` (standalone) and `N = 878` (testnet). When no submitted token clears the threshold, the epoch's blend income is discarded: it is neither carried into the next epoch nor returned to any pool (established by code reading; the simulated network sizes never produced such an epoch), and the spec does not define this case.
 - Findings: 0 critical · 0 high · 1 medium · 1 low · 0 informational
 - Key themes: "threshold subtracts `log₂ N` bits but each node only holds `E·β/N` tokens", "spec condition necessary, not sufficient", "undefined behaviour of the income when nobody is eligible"
 - Must-fix before launch: LB-001 for any deployment expected to exceed `N = 127` on the standalone schedule or `N = 878` on the testnet schedule; at minimum document the supported `N` next to the template parameters.
@@ -47,7 +47,7 @@ Tokens received by an honest node are one per key index and their digests are in
 - Manual review of the in-scope paths, working through sub-issue #110 under parent #8 (question 1 of the parent, "any path where a participant claims more than its share", is what LB-001 amounts to: the few eligible nodes split the whole epoch).
 - Spec conformance against `blend-protocol.md` §Core Quota (`Q_C`, `Q_C^Total`), §Activity Proof (`ε`, the inclusive comparison), §Activity Threshold (`𝒜_ε = max(0, χ − ν − θ)`, the `χ > ν + θ` condition), §Reward Calculation (`R = I / (B + P)`), and against `bedrock-service-reward-distribution.md` §Service Reward Distribution (one note per rewarded `zk_id`, none for zero). The code matches the spec on every one of these; the findings are shared by both and are parameter and design problems.
 - Automated tooling, with versions: `rustc 1.98.1`, `cargo 1.98.1` (the toolchain pinned by `rust-toolchain.toml`); `python3` 3.x with the closed-form model in Appendix C (no numpy). One test was added locally to `ledger/src/mantle/sdp/rewards/blend/mod.rs` (source in Appendix B) and run with `cargo test -p logos-blockchain-ledger --lib -- --ignored --nocapture issue110`.
-- Dynamic testing: the ledger-level simulation of Appendix B, 40 epochs per `N` on the standalone parameters (`N = 100, 200, 500, 1000`) and 10 per `N` on the testnet parameters (`N = 200, 1000, 2000`). The test is a debug build (about 0.2 ms per token evaluation); the testnet `N = 5000` and spec `N = 10 000` rows did not complete within the time budget of this run and are given from the model, which the completed rows match within sampling error. No running network.
+- Dynamic testing: the ledger-level simulation of Appendix B, 40 epochs per `N` on the standalone parameters (`N = 100, 200, 500, 1000`), 10 per `N` on the testnet parameters (`N = 200, 1000, 2000, 5000`) and one epoch at `N = 10 000` on the spec's; 606 s in a debug build (about 0.2 ms per token evaluation). Every row matches the closed-form model within sampling error. No running network.
 
 **Checklist items of #110**
 
@@ -120,8 +120,8 @@ and a token qualifies when its `ε = 8·⌈χ/8⌉`-bit digest is within that ma
 | testnet | 200 | 180 | 7 (16) | 1.000 | 200.0 (200-200) | 200.0 |
 | testnet | 1000 | 36 | 5 (16) | 0.982 | 980.7 (976-985) | 980.7 |
 | testnet | 2000 | 18 | 4 (16) | 0.506 | 1009.5 (989-1039) | 1009.5 |
-| testnet | 5000 | 8 | 2 (16) | 0.017 | not completed in the time budget (model: 83) | — |
-| spec | 10 000 | 195 | 6 (24) | 0.892 | not completed in the time budget (model: 8 916) | — |
+| testnet | 5000 | 8 | 2 (16) | 0.017 | 85.4 (73-97) | 85.4 |
+| spec | 10 000 | 195 | 6 (24) | 0.892 | 8 898 (one epoch) | 8 898 |
 
 The simulated counts are the number of providers whose best token the node-side selection (`compute_activity_proof`, `reward/mod.rs` L128-L145) accepts; the ledger accepted every one of them (`verify_proof`, `target_epoch.rs` L117-L122) and minted exactly that many notes (`finalize` L199-L215), so "paid" equals "eligible" and the rest received nothing for an epoch in which they relayed their full quota.
 
@@ -270,7 +270,9 @@ standalone  1000     6    2     40 |                13.5     7    20 |       13.
 testnet      200   180    7     10 |               200.0   200   200 |      200.0 |                      0 | n/a
 testnet     1000    36    5     10 |               980.7   976   985 |      980.7 |                      0 | n/a
 testnet     2000    18    4     10 |              1009.5   989  1039 |     1009.5 |                      0 | n/a
-(run stopped after the testnet N = 2000 row: the testnet N = 5000 and spec N = 10 000 rows did not complete within the time budget)
+testnet     5000     8    2     10 |                85.4    73    97 |       85.4 |                      0 | n/a
+spec       10000   195    6      1 |              8898.0  8898  8898 |     8898.0 |                      0 | n/a
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 163 filtered out; finished in 606.05s
 ```
 
 Source:
