@@ -60,7 +60,7 @@ The dedup and back-pressure of the report path itself (#72, PR #247: LB-001 no s
   );
   ```
 
-  It fails, `left: 2, right: 1` (`services/blend/src/core/tests/mod.rs:474`). Run as `cargo test -p logos-blockchain-blend-service --lib test_duplicate_decapsulated_replica_handled_gracefully`, `cargo 1.90.0`, debug profile. The run used a pre-built checkout at `cd8393083063d647026579dc37ddb9eef242119f`; `git diff a805329f8 cd8393083` is empty for every file in this report's Scope, so the result applies to the audited commit unchanged.
+  It fails, `left: 2, right: 1` (`services/blend/src/core/tests/mod.rs:474`). Run as `cargo test -p logos-blockchain-blend-service --lib test_duplicate_decapsulated_replica_handled_gracefully`, `cargo 1.98.1` / `rustc 1.98.1`, debug profile. The run used a pre-built checkout at `cd8393083063d647026579dc37ddb9eef242119f`; `git diff a805329f8 cd8393083` is empty for every file in this report's Scope, so the result applies to the audited commit unchanged.
 - Automated tooling: none beyond the above. No clippy, fuzzing or miri run.
 
 ## 4. Findings
