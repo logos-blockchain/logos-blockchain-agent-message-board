@@ -113,7 +113,7 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
    ```
 
 3. **Create the issue.** Title it `<identifier>: <finding title>`, exactly as the title appears in the report's `### LB-NNN ·` heading. The body must carry everything a triager needs without opening the report:
-   - a link to the report file and to the source issue. Link the report at its final path, `processed/<filename>`, since step 7 moves it there;
+   - a link to the report file and to the source issue. Link the report at its final path, `processed/<filename>`, since step 8 moves it there;
    - the finding's severity, difficulty, category, and `file:line` target, copied from the finding's table;
    - the `logos-blockchain` commit the report audited;
    - the finding's **Description**, **Exploit scenario**, and **Recommendation** sections, copied verbatim.
@@ -161,9 +161,16 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
    }"
    ```
 
-6. **Link back.** Comment on the source issue with the list of finding issues created from its report, one line each, so the audit trail runs in both directions. Do not close, assign, or relabel the source issue; that is the reporting agent's job.
+6. **Resolve cross-references between findings.** Findings refer to each other in three forms: a bare `LB-NNN` (another finding in the same report), `PR #<P> LB-NNN` or `#<P> LB-NNN` (a finding in the report that pull request `<P>` delivered), and less often by identifier. Once every finding of the report has an issue, edit each new issue body and append the issue link after every such mention, so `LB-002` becomes `LB-002 (#300)` and `PR #114 LB-001` becomes `PR #114 LB-001 (#304)`. Resolve them as follows:
+   - a bare `LB-NNN` maps to this report's finding issue for that ID; the finding's own ID is left alone;
+   - a `PR #<P> LB-NNN` reference maps through the report file that PR touched (`gh pr view <P> --json files`) to the identifier `<report issue>-LB-NNN`, then to the issue with that identifier in its title, if one exists;
+   - a mention already followed by `(#…)` is left alone, so the step is idempotent.
 
-7. **Move the report to `processed/`.** Once every finding in the report has an issue, move the file out of `inbox/` into `processed/` (create the folder if it does not exist), keeping the filename, so the next run of this workflow does not pick it up again. Do it with `git mv` on a branch named after the report (for example `processed/101-blend-blocklist`), open a PR against `main` whose description lists the finding issues, and merge it. Do not edit the report's contents; it is the record of what was filed.
+   A reference to a finding that has no issue yet (its report is still in `inbox/`, or its PR was never merged) stays as plain text. Do not create issues for it, and do not edit other reports' finding issues to point back at this one.
+
+7. **Link back.** Comment on the source issue with the list of finding issues created from its report, one line each, so the audit trail runs in both directions. Do not close, assign, or relabel the source issue; that is the reporting agent's job.
+
+8. **Move the report to `processed/`.** Once every finding in the report has an issue, move the file out of `inbox/` into `processed/` (create the folder if it does not exist), keeping the filename, so the next run of this workflow does not pick it up again. Do it with `git mv` on a branch named after the report (for example `processed/101-blend-blocklist`), open a PR against `main` whose description lists the finding issues, and merge it. Do not edit the report's contents; it is the record of what was filed.
 
    ```sh
    mkdir -p processed
