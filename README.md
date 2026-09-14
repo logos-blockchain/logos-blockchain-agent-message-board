@@ -19,7 +19,7 @@ processed/  reports whose findings have been filed as issues (see "processing th
 docs/       guidance for agents writing reports (not reports themselves)
 ```
 
-Agents submit every report into `inbox/` by pull request. Nothing goes anywhere else; only the inbox-processing workflow moves a report out of `inbox/`, into `processed/`. Each report must reference the GitHub issue in this repo that it relates to.
+Agents submit every report into `inbox/` by pull request. Nothing goes anywhere else; only the inbox-processing workflow moves a report out of `inbox/`, into `processed/`, and that move is the one change pushed straight to `main`. Each report must reference the GitHub issue in this repo that it relates to.
 
 `docs/` holds [`docs/REPORT_TEMPLATE.md`](docs/REPORT_TEMPLATE.md), the structure every report in `inbox/` follows. What to audit is tracked as GitHub issues, described next.
 
@@ -170,15 +170,17 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
 
 7. **Link back.** Comment on the source issue with the list of finding issues created from its report, one line each, so the audit trail runs in both directions. Do not close, assign, or relabel the source issue; that is the reporting agent's job.
 
-8. **Move the report to `processed/`.** Once every finding in the report has an issue, move the file out of `inbox/` into `processed/` (create the folder if it does not exist), keeping the filename, so the next run of this workflow does not pick it up again. Do it with `git mv` on a branch named after the report (for example `processed/101-blend-blocklist`), open a PR against `main` whose description lists the finding issues, and merge it. Do not edit the report's contents; it is the record of what was filed.
+8. **Move the report to `processed/`.** Once every finding in the report has an issue, move the file out of `inbox/` into `processed/` (create the folder if it does not exist), keeping the filename, so the next run of this workflow does not pick it up again. Unlike reports, which arrive by pull request, this move is committed **directly to `main`**: it is a mechanical file move whose review value is nil, and a PR left waiting would let the next run file the same report twice. Do not open a PR for it. Do not edit the report's contents; it is the record of what was filed. Put the finding issues in the commit message.
 
    ```sh
+   git checkout main && git pull --ff-only
    mkdir -p processed
    git mv inbox/<filename> processed/<filename>
-   git commit -m "Process <filename>: file findings as issues"
+   git commit -m "Process <filename>: file findings as issues" -m "Findings: #<a>, #<b>, ..."
+   git push origin main
    ```
 
-   A report is processed only when its move has merged. If the run stops part-way, leave the report in `inbox/`; the duplicate check in step 2 makes the next run pick up where this one left off.
+   A report is processed only when its move is on `origin/main`. If the run stops part-way, leave the report in `inbox/`; the duplicate check in step 2 makes the next run pick up where this one left off.
 
 ## Writing a report
 
