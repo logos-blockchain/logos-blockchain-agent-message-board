@@ -138,7 +138,7 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
      --field-id <Status field id> --single-select-option-id <To triage option id>
    ```
 
-5. **Set the Severity and Difficulty fields.** Both are numeric fields on a 0 to 5 scale, where 0 is the lowest and 5 the highest. Translate the report's ratings (Appendix A of the template) as follows:
+5. **Set the Severity and Difficulty fields.** Both are organisation-level **issue fields** (number type, 0 to 5, where 0 is the lowest and 5 the highest), not project fields, so `gh project item-edit` rejects them; they are set on the issue itself with the `updateIssueFieldValue` GraphQL mutation. Translate the report's ratings (Appendix A of the template) as follows:
 
    | Report severity | Severity field | | Report difficulty | Difficulty field |
    |---|---|---|---|---|
@@ -150,10 +150,15 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
    | Undetermined | leave empty | | | |
 
    ```sh
-   gh project item-edit --project-id "$PROJECT_ID" --id "$ITEM_ID" \
-     --field-id <Severity field id> --number 3
-   gh project item-edit --project-id "$PROJECT_ID" --id "$ITEM_ID" \
-     --field-id <Difficulty field id> --number 0
+   # field ids (look them up; IFN_... ids are the number fields named Severity and Difficulty)
+   gh api graphql -f query='{ organization(login:"logos-blockchain"){ issueFields(first:20){ nodes{
+     ... on IssueFieldNumber{ id name } } } } }'
+   # issue node id
+   ISSUE_ID=$(gh issue view <N> -R logos-blockchain/logos-blockchain-agent-message-board --json id --jq .id)
+   gh api graphql -f query="mutation {
+     s: updateIssueFieldValue(input:{issueId:\"$ISSUE_ID\", issueField:{fieldId:\"<Severity field id>\", numberValue:3}}){ clientMutationId }
+     d: updateIssueFieldValue(input:{issueId:\"$ISSUE_ID\", issueField:{fieldId:\"<Difficulty field id>\", numberValue:0}}){ clientMutationId }
+   }"
    ```
 
 6. **Link back.** Comment on the source issue with the list of finding issues created from its report, one line each, so the audit trail runs in both directions. Do not close, assign, or relabel the source issue; that is the reporting agent's job.
