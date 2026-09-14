@@ -71,11 +71,11 @@ When the code and the specification disagree, report it as a finding titled `Spe
 
 Every agent follows the same loop, after reading the core specifications above. Do the steps in order and do not skip the last one; the issue tracker is how the swarm coordinates.
 
-1. **Claim an issue.** List the open issues, pick one at random from those with no assignee, and assign it to yourself before doing anything else. Random rather than lowest-numbered, so that agents starting at the same time spread out instead of colliding on the same issue. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle.
+1. **Claim an issue.** List the open issues, pick one at random from those with no assignee, and assign it to yourself before doing anything else. Random rather than lowest-numbered, so that agents starting at the same time spread out instead of colliding on the same issue. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle. Issues titled `<N>-LB-NNN: ...` are findings filed from reports and tracked in the [Agent Findings project](https://github.com/orgs/logos-blockchain/projects/11); they are not review work and must never be claimed. They carry neither label, so the label filter below excludes them, and the title filter is a second guard.
 
    ```sh
-   gh issue list --state open --label checklist --json number,assignees \
-     --jq '.[] | select(.assignees | length == 0) | .number' \
+   gh issue list --state open --label checklist --json number,title,assignees \
+     --jq '.[] | select(.assignees | length == 0) | select(.title | test("^[0-9]+-LB-[0-9]{3}") | not) | .number' \
      | awk 'BEGIN { srand() } { n[NR] = $0 } END { print n[int(rand() * NR) + 1] }'
    gh issue edit <N> --add-assignee @me
    ```
@@ -99,7 +99,7 @@ Every agent follows the same loop, after reading the core specifications above. 
 
 ## Agent workflow: processing the inbox
 
-A second kind of agent turns merged reports into trackable work. Each `LB-NNN` finding in a report in `inbox/` becomes one GitHub issue in this repo, added to the [Findings project](https://github.com/orgs/logos-blockchain/projects/11) in the **To Triage** column, where humans decide what to do with it. When a report has been fully processed it is moved from `inbox/` to `processed/`, so `inbox/` only ever holds reports still waiting to be filed. The steps are idempotent: running them again over the same report must not create duplicates.
+A second kind of agent turns merged reports into trackable work. Each `LB-NNN` finding in a report in `inbox/` becomes one GitHub issue in this repo, added to the [Agent Findings project](https://github.com/orgs/logos-blockchain/projects/11) in the **To triage** column, where humans decide what to do with it. When a report has been fully processed it is moved from `inbox/` to `processed/`, so `inbox/` only ever holds reports still waiting to be filed. The steps are idempotent: running them again over the same report must not create duplicates.
 
 Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s project`), since the default `repo` scope cannot read or write projects. Always pass `-R logos-blockchain/logos-blockchain-agent-message-board` to `gh issue` commands.
 
@@ -125,7 +125,7 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
      --title "101-LB-004: <finding title>" --body-file finding.md --label blend
    ```
 
-4. **Add it to the project in To Triage.** Add the new issue to project 11, then set its **Status** to `To Triage`. Field and option IDs are looked up, not hard-coded; they change if the project is edited.
+4. **Add it to the project in To triage.** Add the new issue to project 11, then set its **Status** to `To triage`. Field and option IDs are looked up, not hard-coded; they change if the project is edited.
 
    ```sh
    PROJECT_ID=$(gh project view 11 --owner logos-blockchain --format json --jq .id)
@@ -135,7 +135,7 @@ Requirements: `gh` authenticated with the `project` scope (`gh auth refresh -s p
    gh project field-list 11 --owner logos-blockchain --format json \
      --jq '.fields[] | {name, id, options}'
    gh project item-edit --project-id "$PROJECT_ID" --id "$ITEM_ID" \
-     --field-id <Status field id> --single-select-option-id <To Triage option id>
+     --field-id <Status field id> --single-select-option-id <To triage option id>
    ```
 
 5. **Set the Severity and Difficulty fields.** Both are numeric fields on a 0 to 5 scale, where 0 is the lowest and 5 the highest. Translate the report's ratings (Appendix A of the template) as follows:
