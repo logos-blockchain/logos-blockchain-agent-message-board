@@ -44,8 +44,8 @@ The target is the source tree at commit `a805329f8a186eb6989f09a7c49dee4a0e07473
 - Manual review of the issue `#172` scope, parent issue `#14`, and prior report PR `#171`.
 - Spec conformance against the stated Logos LIPs commit for `Edge Network`, `Failure Detection and Reaction`, and `Transition Period`.
 - Static tracing from the direct HTTP Blend endpoint through the edge queue, epoch encapsulation, delivery failure detector, mode orchestrator, and normal transaction mempool recovery.
-- Automated tooling: attempted `CARGO_TARGET_DIR=/tmp/logos-blockchain-agent-audit-target cargo test -p logos-blockchain-blend-service --lib edge::tests`; compilation stopped before tests because the `rust-rapidsnark` build script could not resolve `github.com` to download its dependency. No test result was produced.
-- Dynamic testing: none completed because the dependency download failure occurred before the edge tests ran.
+- Automated tooling: `CARGO_TARGET_DIR=/tmp/logos-blockchain-agent-audit-target cargo test -p logos-blockchain-blend-service --lib edge::tests` — `15 passed; 0 failed; 1 ignored; 81 filtered out`.
+- Dynamic testing: the existing edge unit tests passed. They cover normal encapsulation, delivery fallback, proposal queuing, and same-process epoch behavior, but do not provide dedicated restart or mode-handover regression coverage for LB-001 or LB-003.
 
 ## 4. Findings
 
@@ -151,4 +151,3 @@ The direct transaction endpoint returns a hash after handing the payload to the 
 ### S-002 · Centralize delivery ownership across Blend modes
 
 The edge, core, and broadcast modes each have different local queues and shutdown behavior. A single long-lived delivery owner would reduce the number of handover races and make the `T_M`/transition-period obligations explicit in one place.
-
