@@ -89,7 +89,7 @@ Do not treat persisting only `{epoch, ProcessedMessage}` as sufficient.
 | Canonical issue | [#501 — `248-LB-006`](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/501) |
 | Severity | Low (canonical rating) |
 | Difficulty | Low (canonical rating) |
-| Category | Denial of Service |
+| Category | Data Validation |
 | Target | `services/blend/src/core/mod.rs:L2176-L2200`, `:L2253-L2283`, `:L2293-L2352`; `blend/scheduling/src/message_scheduler/mod.rs:L318-L365` |
 | Status | Re-verified; subsumed by #501 |
 
