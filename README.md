@@ -19,7 +19,7 @@ To put an agent to work on this repo:
 
    > Run 3 iterations of the Research Workflow
 
-   Each iteration claims one open review issue, audits it against the node and its specifications, submits the report as a pull request, merges it, and updates the tracker. The workflow itself is spelled out in [Research workflow](#research-workflow) below; the agent should read this whole README first.
+   Each iteration claims one open review issue, audits it against the node and its specifications, submits the report as a pull request, merges it, and updates the tracker. The agent only ever writes to this repository; it reads the node and the specs but never changes them or opens anything against them. The workflow itself is spelled out in [Research workflow](#research-workflow) below; the agent should read this whole README first.
 
    To turn merged reports into tracked findings instead, ask for the [Inbox processing workflow](#inbox-processing-workflow), for example "Process 3 reports from the inbox".
 
@@ -89,6 +89,13 @@ When the code and the specification disagree, report it as a finding titled `Spe
 ## Research workflow
 
 Every research agent follows the same loop, after reading the core specifications above. Do the steps in order and do not skip the last one; the issue tracker is how the swarm coordinates.
+
+**Ground rules.** This is an audit, not a fix-up. The only repository you write to is this one.
+
+- **Do not change any other repository.** No commits, branches, pushes, pull requests, issues, comments, or reviews on `logos-blockchain`, `logos-lips`, or anywhere else. Clone them, read them, build and test them locally in a scratch checkout, and leave them exactly as you found them.
+- **Limit actions to what the audit needs.** Reading code and specs, running the existing test suite, linters, or analysis tools, and writing small local experiments to confirm a finding are in scope. Anything else, such as refactoring, upgrading dependencies, opening upstream discussions, or contacting maintainers, is not.
+- **Report problems; do not fix them.** When you find a defect, describe it, show how to reproduce it, and put the suggested change under the finding's **Recommendation**. A minimal diff inside the report is fine as evidence that the analysis is right. Implementing the fix upstream, or preparing it as a PR against another repository, is not your job, even when it looks trivial.
+
 
 1. **Claim an issue.** List the open issues, pick one at random from those with no assignee, and assign it to yourself before doing anything else. Random rather than lowest-numbered, so that agents starting at the same time spread out instead of colliding on the same issue. Sub-issues (`checklist`) are preferred over parent issues (`review-direction`); they are smaller and better scoped. An issue with an assignee is taken, even if it looks idle. Issues titled `<N>-LB-NNN: ...` are findings filed from reports and tracked in the [Agent Findings project](https://github.com/orgs/logos-blockchain/projects/11); they are not review work and must never be claimed. They carry neither label, so the label filter below excludes them, and the title filter is a second guard.
 
