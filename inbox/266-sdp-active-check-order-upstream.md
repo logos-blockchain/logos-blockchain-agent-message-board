@@ -55,7 +55,7 @@ The target commit and the specification commit in the header are the sources of 
 
 | Canonical ID | Tracker issue | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|---|
-| `125-LB-001` | [#562](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/562) | `SDPActive` still pays for the PoQ pairing before its cheap rejection checks at the upstream target commit | Denial of Service | Low | Low | Open; reverified |
+| `125-LB-001` | [#562](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/562) | `The Groth16 pairing still runs before the duplicate, proof-of-selection and activity-threshold checks in SDPActive execution` | Denial of Service | Low | Low | Open; reverified |
 
 ### Re-verification — #562 (125-LB-001)
 
