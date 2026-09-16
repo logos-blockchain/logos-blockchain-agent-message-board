@@ -3,7 +3,7 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/87`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `a805329f8a186eb6989f09a7c49dee4a0e07473b` — component(s): `tracing`, `services/tracing`, and node tracing configuration
 Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`, `bedrock-genesis-block.md`, `p2p-network-bootstrapping.md`
-Date: `2026-09-16` — author: `Codex` — status: `draft`
+Date: `2026-09-16` — author: `Codex` — status: `final`
 
 ---
 
