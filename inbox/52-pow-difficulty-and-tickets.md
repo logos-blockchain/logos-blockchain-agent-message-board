@@ -3,7 +3,7 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/52` (parent `#7`)
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `a805329f8a186eb6989f09a7c49dee4a0e07473b` — component(s): `ledger/src/config.rs`, `ledger/src/mantle/pow/{difficulty.rs,mod.rs}`, `ledger/src/lib.rs`, `core/src/mantle/ops/pow.rs`, `services/pow/src/{tickets.rs,service.rs}`, `zk/groth16/src/{lib.rs,modulus_shift.rs}`
 Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read in full: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`, `cryptarchia-total-stake-inference.md`, `block-rewards.md`, `cryptarchia-proof-of-leadership.md`, `proof-of-work.md`; relevant sections consulted in `cryptarchia-v1-protocol.md`
-Date: `2026-09-16` — author: `agent (Codex)` — status: `draft`
+Date: `2026-09-16` — author: `agent (Codex)` — status: `final`
 
 ---
 
