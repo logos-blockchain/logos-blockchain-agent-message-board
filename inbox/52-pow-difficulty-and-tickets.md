@@ -1,8 +1,8 @@
-# Audit Report — Reward PoW difficulty adjustment and ticket validation (#52)
+# Audit Report — Reward PoW difficulty adjustment and ticket validation
 
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/52` (parent `#7`)
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `a805329f8a186eb6989f09a7c49dee4a0e07473b` — component(s): `ledger/src/config.rs`, `ledger/src/mantle/pow/{difficulty.rs,mod.rs}`, `ledger/src/lib.rs`, `core/src/mantle/ops/pow.rs`, `services/pow/src/{tickets.rs,service.rs}`, `zk/groth16/src/{lib.rs,modulus_shift.rs}`
-Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read in full: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`, `cryptarchia-total-stake-inference.md`, `block-rewards.md`, `cryptarchia-proof-of-leadership.md`; relevant sections consulted in `cryptarchia-v1-protocol.md`
+Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read in full: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`, `cryptarchia-total-stake-inference.md`, `block-rewards.md`, `cryptarchia-proof-of-leadership.md`, `proof-of-work.md`; relevant sections consulted in `cryptarchia-v1-protocol.md`
 Date: `2026-09-16` — author: `agent (Codex)` — status: `draft`
 
 ---
@@ -12,7 +12,7 @@ Date: `2026-09-16` — author: `agent (Codex)` — status: `draft`
 - Overall assessment: the pinned implementation avoids the requested arithmetic, replay, validation-cost, and target-encoding failures; one low-severity deployment-invariant gap accepts a zero reward-claim target that permanently disables claims after the next applied block.
 - Findings: `0` critical · `0` high · `0` medium · `1` low · `0` informational
 - Key themes: `wide-integer deterministic retargeting`, `consensus nullifier replay protection`, `deployment validation`
-- Must-fix before launch: reject `target_claims_per_block: 0` when reward PoW is enabled (LB-001).
+- Must-fix before launch: none from issue #52 alone; the positive deployment invariant remains the canonical recommendation for LB-001.
 
 ## 2. Scope
 
@@ -41,7 +41,8 @@ Date: `2026-09-16` — author: `agent (Codex)` — status: `draft`
 
 ## 3. Method
 
-- Manual review of the paths above, working through issue `#52` and parent issue `#7` after reading the applicable specifications.
+- Manual review of the paths above, working through issue `#52` and parent issue `#7` after reading the applicable specifications, including the pinned `proof-of-work.md`.
+- Spec conformance against `proof-of-work.md` §Parameters, §Puzzle Target, and §Reward Difficulty, which define `TARGET_CLAIMS_PER_BLOCK = 10`, strict target comparison, and the reward-difficulty update formula.
 - Reviewed the recent PoW history, including `b8c3c54ff` (`chore: update pow ticket derivation`) and `13f0c2236` (`fix(pow): Use precomputed difficulty settings`), to distinguish current behavior from superseded implementation concerns.
 - Traced the difficulty formula from applied-block claim events through `LedgerState::update_pow_reward_difficulty`, and traced a ticket from mining generation through validation and nullifier recording.
 - Automated tooling: none beyond focused unit-test execution.
@@ -57,14 +58,14 @@ Focused commands and results:
 
 | ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
-| LB-001 | Zero reward-claim target accepted by deployment validation | Configuration | Low | Low | Open |
+| LB-001 | Zero reward-claim target accepted by deployment validation | Configuration | Low | High | Open |
 
 ### LB-001 · Zero reward-claim target accepted by deployment validation
 
 | | |
 |---|---|
 | Severity | Low |
-| Difficulty | Low |
+| Difficulty | High |
 | Category | Configuration |
 | Target | `ledger/src/config.rs:L164-L165,L245-L254` (`RewardPoWConfig::validate`); `ledger/src/mantle/pow/difficulty.rs:L41-L49` (`compute_new_reward_difficulty`) |
 | Status | Open |
@@ -73,18 +74,20 @@ Focused commands and results:
 
 `target_claims_per_block` is the target `T` used by the reward-difficulty controller, but it is represented as an unrestricted `u64` in both the runtime struct and the deserialization wire struct (`ledger/src/config.rs:L164-L165,L183-L193`). `RewardPoWConfig::validate` checks the EMA bounds and payout-rate multiplication overflow, but does not require `T > 0` (`ledger/src/config.rs:L245-L254`).
 
+The pinned [`proof-of-work.md` §Parameters](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/proof-of-work.md#parameters) defines `TARGET_CLAIMS_PER_BLOCK: uint64 = 10`. Its [`Puzzle Target`](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/proof-of-work.md#puzzle-target) section defines a valid ticket as strictly below the target, and [`Reward Difficulty`](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/proof-of-work.md#reward-difficulty) uses `T` in the retarget formula. Thus the positive target is a normative protocol parameter, not an assumption inferred only from the implementation.
+
 The retarget formula multiplies the next target by `T` (`ledger/src/mantle/pow/difficulty.rs:L41-L44`). With `T = 0`, the numerator floor still keeps the division defined, but the result is always zero. The subsequent cap and field conversion preserve zero (`ledger/src/mantle/pow/difficulty.rs:L46-L49`).
 
 **Exploit scenario**
 
-An operator supplies a deployment configuration with `rate_num > 0` and `target_claims_per_block: 0`. The configuration loads successfully. On the next applied block, `ledger/src/lib.rs:L286-L295` retargets the difficulty and sets it to `PowTarget::ZERO`, regardless of the number of accepted claims. Since claim validation requires a strictly lower ticket (`core/src/mantle/ops/pow.rs:L51-L64,L307-L314`), no future ticket can satisfy `ticket < 0`; because the zero target is absorbing in the current controller, reward claiming remains disabled until the consensus state is explicitly repaired or reset. The shipped deployment values are positive, so this is an operator-misconfiguration path rather than an unauthenticated network attack.
+An operator supplies a deployment configuration with `rate_num > 0` and `target_claims_per_block: 0`. The configuration loads successfully. On the next applied block, `ledger/src/lib.rs:L286-L295` retargets the difficulty and sets it to `PowTarget::ZERO`, regardless of the number of accepted claims. Since the protocol's strict target rule and claim validation require a lower ticket (`core/src/mantle/ops/pow.rs:L51-L64,L307-L314`), no future ticket can satisfy `ticket < 0`; because the zero target is absorbing in the current controller, reward claiming remains disabled until the consensus state is explicitly repaired or reset. The shipped deployment values are positive, so this is an operator-misconfiguration path rather than an unauthenticated network attack. The demonstrated trigger is privileged deployment configuration, which makes Difficulty High under Appendix A.
 
 **Recommendation**
 
 - *Short term*: make `target_claims_per_block` a `NonZeroU64`, or add an explicit `target_claims_per_block == 0` validation error. Continue using `rate_num: 0` as the way to disable rewards.
 - *Long term*: add deserialization and controller tests proving that zero is rejected, and retain a regression test that a positive target remains positive under an empty block and an extreme claim count unless an explicit protocol rule permits a zero target.
 
-**References**: [`block-rewards.md` §Parametrization](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/block-rewards.md#parametrization); [`cryptarchia-v1-protocol.md` §Leadership Lottery](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/cryptarchia-v1-protocol.md#leadership-lottery)
+**References**: [`proof-of-work.md` §Parameters](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/proof-of-work.md#parameters); [`proof-of-work.md` §Puzzle Target](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/proof-of-work.md#puzzle-target); [`proof-of-work.md` §Reward Difficulty](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/proof-of-work.md#reward-difficulty); [`block-rewards.md` §Parametrization](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/block-rewards.md#parametrization); [`cryptarchia-v1-protocol.md` §Leadership Lottery](https://github.com/logos-co/logos-lips/blob/7244d3b05ddec91a4a7b565bd5a9340ab77ededd/docs/blockchain/raw/cryptarchia-v1-protocol.md#leadership-lottery)
 
 ### Requested checks with no confirmed finding
 
