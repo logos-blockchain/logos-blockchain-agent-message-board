@@ -282,7 +282,7 @@ Item 3 of the issue asks about a state/scheduler mismatch that survives a restar
 
 Symmetrically, the old-epoch release round passes `None` where the current-epoch one passes a state updater (`L2524`), so nothing is removed either and the asymmetry is at least self-consistent. The adjacent comment explains the equivalent choice for old-epoch *data* messages — they "are not tracked in the new epoch's recovery state, which was reset on rotation" (`L2499-L2504`) — and the same reasoning plausibly covers processed messages, but it is not stated there and the field's own documentation does not carve out an exception.
 
-The exposure is the transition period only: $`TP = 30`$ rounds out of $`E = 648000`$, so about 0.005 % of an epoch. A node restarting inside that window loses whatever old-epoch messages were queued, without a log line. Each lost message that had a layer for this node is one the network cannot recover, since the identifier is already marked forwarded upstream (#72 LB-002 describes the same permanent-loss shape).
+The exposure is the transition period only: $`TP = 30`$ rounds out of $`E = 648000`$, so about 0.005 % of an epoch. A node restarting inside that window loses whatever old-epoch messages were queued, without a log line. For an `Encapsulated` entry, recovery additionally requires valid old-epoch publication/routing context and delayed-release semantics; a fully `Decapsulated` entry is not intrinsically tied to that context and can be dispatched after restart if it is retained and reseeded. Exact original release timing would still require separate timing state. Under normal non-abstaining operation, a sender that does not observe delivery by the Blend traversal deadline can directly broadcast the payload through failure detection, so loss of this node's queued copy is not generally equivalent to permanent network-wide payload loss, although the node's timely Blend delivery path and old-epoch fallback are lost (#72 LB-002 describes related delivery-state context).
 
 **Exploit scenario**
 
@@ -290,9 +290,9 @@ None; an attacker cannot choose when a node restarts, and the window is 30 s per
 
 **Recommendation**
 - *Short term*: document the exclusion where the field is declared (`core/state.rs:L108`) and at `L2278`, matching the comment already at `L2499-L2504`; log at `debug` when the transition ends with messages still queued, the way `drop_unreleased_payloads_for_epoch` does for the failure detector (`core/delivery.rs:L78-L88`).
-- *Long term*: if old-epoch processed messages are worth recovering, give the state a second, epoch-tagged set rather than reusing the current-epoch one; if they are not, make that explicit with a typed marker instead of a `None` argument at one call site.
+- *Long term*: choose the recovery policy per variant. Retain and reseed `Decapsulated` entries from their stored payload; preserving their exact original delay would require separate timing state. For `Encapsulated`, persist enough state to reconstruct valid old-epoch publication/routing context and delayed-release/transition-expiry semantics; `{epoch, ProcessedMessage}` alone is insufficient for this variant. If they are not worth recovering, make that explicit with a typed marker instead of a `None` argument at one call site.
 
-**References**: `blend-protocol.md` › Transition Period; #72 LB-002 for the permanent-loss argument.
+**References**: `blend-protocol.md` › Transition Period; #72 LB-002 for related delivery-state context; [second-pass report PR #573](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/pull/573) for the `Decapsulated`/`Encapsulated` recovery distinction and its separate stale-state/rotation finding.
 
 ### LB-010 · Spec deviation: `R_D` is applied to block proposals only, so a transaction gets no redundancy and the leadership quota it is drawn against assumes it does
 
