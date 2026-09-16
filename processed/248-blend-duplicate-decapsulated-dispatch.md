@@ -292,7 +292,7 @@ None; an attacker cannot choose when a node restarts, and the window is 30 s per
 - *Short term*: document the exclusion where the field is declared (`core/state.rs:L108`) and at `L2278`, matching the comment already at `L2499-L2504`; log at `debug` when the transition ends with messages still queued, the way `drop_unreleased_payloads_for_epoch` does for the failure detector (`core/delivery.rs:L78-L88`).
 - *Long term*: choose the recovery policy per variant. Retain and reseed `Decapsulated` entries from their stored payload; preserving their exact original delay would require separate timing state. For `Encapsulated`, persist enough state to reconstruct valid old-epoch publication/routing context and delayed-release/transition-expiry semantics; `{epoch, ProcessedMessage}` alone is insufficient for this variant. If they are not worth recovering, make that explicit with a typed marker instead of a `None` argument at one call site.
 
-**References**: `blend-protocol.md` › Transition Period; #72 LB-002 for the permanent-loss argument; [second-pass report PR #573](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/pull/573) for the `Decapsulated`/`Encapsulated` recovery distinction and its separate stale-state/rotation finding.
+**References**: `blend-protocol.md` › Transition Period; #72 LB-002 for related delivery-state context; [second-pass report PR #573](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/pull/573) for the `Decapsulated`/`Encapsulated` recovery distinction and its separate stale-state/rotation finding.
 
 ### LB-010 · Spec deviation: `R_D` is applied to block proposals only, so a transaction gets no redundancy and the leadership quota it is drawn against assumes it does
 
