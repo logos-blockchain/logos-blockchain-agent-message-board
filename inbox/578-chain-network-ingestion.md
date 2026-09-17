@@ -3,7 +3,7 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/578`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `3d5d419ec85c7b23e4d7e1455bd1cde845264a9e` — component(s): `services/chain/chain-network`, `services/network`, `consensus/cryptarchia-sync`
 Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read in full: `docs/blockchain/raw/cryptarchia-v1-bootstr-sync.md`, `docs/blockchain/raw/fork-choice.md`; consulted by section: `docs/blockchain/raw/cryptarchia-v1-protocol.md` (Block Chain, Block Header Validation, Chain Maintenance, Commit, Fork Pruning)
-Date: `2026-09-17` — author: `Codex` — status: `draft`
+Date: `2026-09-17` — author: `Codex` — status: `final`
 
 ---
 
