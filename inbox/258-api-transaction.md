@@ -10,9 +10,9 @@ Date: `2026-09-18` — author: `codex` — status: `final`
 ## 1. Summary
 
 - Overall assessment: Re-verification confirms that the transaction-by-hash HTTP endpoint cannot decode a transaction stored by either current writer; the defect is already tracked by canonical finding `31-LB-001` (issue #487).
-- Findings: `0` critical · `0` high · `0` medium · `0` low · `0` informational
+- Findings: `0` new; canonical `31-LB-001` re-verified — **Low / Low / Data Validation**
 - Key themes: `binary storage codec versus JSON HTTP decoding`, `missing endpoint coverage`
-- Must-fix before launch: none new; see the existing canonical finding below.
+- Must-fix before launch: see canonical `31-LB-001` below; no new finding is introduced.
 
 ## 2. Scope
 
@@ -45,7 +45,7 @@ The pinned `logos-blockchain` and `logos-lips` revisions in the header are the r
 
 ## 4. Findings
 
-No new `LB-NNN` finding is opened. The confirmed defect is the existing canonical finding `31-LB-001`, titled “HTTP transaction lookup decodes bincode-stored transactions with `serde_json`, so the endpoint can never return one,” tracked at [issue #487](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/487) and originally reported in [processed/31-serde-untrusted-input.md](../processed/31-serde-untrusted-input.md).
+No new `LB-NNN` finding is opened. The confirmed defect is the existing canonical finding `31-LB-001`, titled “HTTP transaction lookup decodes bincode-stored transactions with `serde_json`, so the endpoint can never return one.” Its preserved classification is **Low severity / Low difficulty / Data Validation**, tracked at [issue #487](https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/487) and originally reported in [processed/31-serde-untrusted-input.md](../processed/31-serde-untrusted-input.md).
 
 ### Re-verification of `31-LB-001`
 
@@ -60,4 +60,3 @@ The prior canonical report's recommendation remains applicable: decode with `Tx:
 ### S-001 · Add regression coverage for the transaction-by-hash route
 
 Add a handler or integration test that writes a transaction using `StorageMsg::store_transactions_request`, calls `GET /cryptarchia/transaction/:id`, and asserts that the response contains the original transaction. This would prevent another human-readable/binary codec mismatch and would close the coverage gap identified in this re-verification.
-
