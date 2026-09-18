@@ -46,7 +46,7 @@ The pinned `logos-lips` specifications are the reference. The failure detector i
 
 ## 4. Findings
 
-No new `LB-NNN` finding is opened. The two material behaviors below are the same root causes already reported in **#276 LB-002** and **#276 LB-003** in [processed/276-blend-delivery-observation-lag.md](../processed/276-blend-delivery-observation-lag.md). Reusing those findings avoids splitting one defect across duplicate identifiers. Their preserved classifications are:
+No new `LB-NNN` finding is opened. The two material behaviors below are the same root causes already reported in **#276 LB-002** and **#276 LB-003** in [inbox/276-blend-delivery-observation-lag.md](276-blend-delivery-observation-lag.md). Reusing those findings avoids splitting one defect across duplicate identifiers. Their preserved classifications are:
 
 - **#276 LB-002** — Low / Low / Denial of Service.
 - **#276 LB-003** — Low / Low / Denial of Service.
