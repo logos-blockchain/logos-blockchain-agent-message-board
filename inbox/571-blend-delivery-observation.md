@@ -1,7 +1,7 @@
 # Audit Report — Blend delivery observation after validation and lag
 
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/571`
-Target: `https://github.com/logos-blockchain/logos-blockchain` @ `a805329f8a186eb6989f09a7c49dee4a0e07473b` — component(s): `services/blend` delivery observation, `services/chain/chain-network` proposal observation, `services/tx-service` accepted-item observation
+Target: `https://github.com/logos-blockchain/logos-blockchain` @ `54328b50eb47ab4b8fd8044f8db5fbcebed718c0` — component(s): `services/blend` delivery observation, `services/chain/chain-network` proposal observation, `services/tx-service` accepted-item observation
 Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read in full: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`, `blend-protocol.md`, `bedrock-v1.1-block-construction.md`
 Date: `2026-09-18` — author: `codex` — status: `final`
 
@@ -40,13 +40,16 @@ The pinned `logos-lips` specifications are the reference. The failure detector i
 - Read issue `#571`, parent `#12`, repo-context issue `#19`, and the existing report for #276.
 - Read `bedrock-architecture-overview.md` and `overview-cryptoeconomics.md` in full before source review.
 - Read `blend-protocol.md` and `bedrock-v1.1-block-construction.md` in full. The relevant sections were Blend § Failure Detection and Reaction, § Detection, § Direct Broadcast, § Relaying, § Processing, and § Releasing; block-construction § Block Proposal Reconstruction and § Block Proposal Validation.
-- Re-read the exact source paths at `a805329f…`, the clean shared audit checkout. The issue’s older `19353c619` hint is not present in that checkout. A focused diff of all audited paths against the #276 target `3d5d419ec85c7b23e4d7e1455bd1cde845264a9e` showed no relevant changes.
+- Issue #571 was spawned from #145 / PR #570, whose audit target is `54328b50…`; the source paths were therefore re-read at that exact revision in an isolated checkout rather than using the newer shared checkout. A focused comparison of `54328b50…` through `a805329f…` found four intervening commits, none of which modifies the audited Blend delivery-observation paths. A focused diff of the exact target against the #276 target `3d5d419ec85c7b23e4d7e1455bd1cde845264a9e` also showed no relevant changes.
 - Traced the full observation path: network proposal/transaction input → chain-network or mempool broadcast channel → Blend dispatcher → merged stream → `FailureDetector` → direct-broadcast branch.
-- Ran `cargo +nightly-2026-07-05 test -p logos-blockchain-blend-service delivery::failure_detection::tests:: --lib --target-dir /tmp/logos-audit-571-target`; all 10 existing failure-detector unit tests passed. No devnet or throughput measurement was run.
+- Ran the same command from the exact `54328b50…` checkout: `cargo +nightly-2026-07-05 test -p logos-blockchain-blend-service delivery::failure_detection::tests:: --lib --target-dir /tmp/logos-audit-571-54328-target`; all 10 existing failure-detector unit tests passed. No devnet or throughput measurement was run.
 
 ## 4. Findings
 
-No new `LB-NNN` finding is opened. The two material behaviors below are the same root causes already reported in **#276 LB-002** and **#276 LB-003** in [inbox/276-blend-delivery-observation-lag.md](276-blend-delivery-observation-lag.md). Reusing those findings avoids splitting one defect across duplicate identifiers.
+No new `LB-NNN` finding is opened. The two material behaviors below are the same root causes already reported in **#276 LB-002** and **#276 LB-003** in [processed/276-blend-delivery-observation-lag.md](../processed/276-blend-delivery-observation-lag.md). Reusing those findings avoids splitting one defect across duplicate identifiers. Their preserved classifications are:
+
+- **#276 LB-002** — Low / Low / Denial of Service.
+- **#276 LB-003** — Low / Low / Denial of Service.
 
 ### Re-verification of #276 LB-002 — cross-type observation streams share terminal fate
 
@@ -82,4 +85,3 @@ Test that a proposal is observable when it is already applied, fails local recon
 ### S-003 · Bound detector memory after terminal failure
 
 If the implementation keeps a terminal state, stop accepting new entries into `unacknowledged_blended_payloads` and emit one diagnostic. If it resumes, explicitly abandon the entries that overlap the gap before rearming expiry.
-
