@@ -12,7 +12,7 @@ Date: `2026-09-19` — author: `Codex` — status: `final`
 - Overall assessment: the prior peer-triggered log-volume observation remains valid at the pinned target; the node still turns several unauthenticated network events into unbounded-rate ERROR records sent through lossy default sinks.
 - Findings: `0 new findings; canonical 37-LB-001 / #457 re-verified — Low / Low / Denial of Service`
 - Key themes: peer-triggered ERROR volume, silent log loss, missing per-event rate limiting
-- Must-fix before launch: demote or rate-limit the peer-triggered records and expose the lossy appender's dropped-line counter.
+- Must-fix before launch: none; rate-limit/demote peer-triggered ERROR events and expose appender drops as hardening tracked by canonical #457.
 
 ## 2. Scope
 
