@@ -10,7 +10,7 @@ Date: `2026-09-19` — author: `Codex` — status: `final`
 ## 1. Summary
 
 - Overall assessment: the prior peer-triggered log-volume observation remains valid at the pinned target; the node still turns several unauthenticated network events into unbounded-rate ERROR records sent through lossy default sinks.
-- Findings: `0` critical · `0` high · `0` medium · `1` low · `0` informational
+- Findings: `0 new findings; canonical 37-LB-001 / #457 re-verified — Low / Low / Denial of Service`
 - Key themes: peer-triggered ERROR volume, silent log loss, missing per-event rate limiting
 - Must-fix before launch: demote or rate-limit the peer-triggered records and expose the lossy appender's dropped-line counter.
 
@@ -24,6 +24,7 @@ Date: `2026-09-19` — author: `Codex` — status: `final`
 | `blend/network/src/core/with_edge/behaviour/handler/receiving.rs` | Truncated or failed inbound edge messages |
 | `services/chain/chain-network/src/lib.rs` | Proposal reconstruction and apply errors from gossipsub input |
 | `tracing/src/logging/local.rs`, `services/tracing`, node tracing serde | Queue behavior, filters, sink construction, rotation defaults |
+| `services/blend/src/core/mod.rs` | Full-membership INFO logging at the core service startup seam |
 | `zone-sdk`, `logos_sql`, `services/api`, `c-bindings` | Requested follow-up sweep for network, HTTP, and FFI-reachable `warn!`/`error!` sites |
 
 **Out of scope**
@@ -48,9 +49,9 @@ The operator uses the shipped node logging defaults and the host is not compromi
 
 | ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
-| LB-001 | Unauthenticated peers can refill ERROR sinks without an application-level rate limit | Denial of Service | Low | Low | Open; re-verified from report #37 |
+| 37-LB-001 / #457 | Unauthenticated peers can refill ERROR sinks without an application-level rate limit | Denial of Service | Low | Low | Open; canonical finding re-verified |
 
-### LB-001 · Unauthenticated peers can refill ERROR sinks without an application-level rate limit
+### 37-LB-001 / #457 · Unauthenticated peers can refill ERROR sinks without an application-level rate limit
 
 | | |
 |---|---|
@@ -58,7 +59,7 @@ The operator uses the shipped node logging defaults and the host is not compromi
 | Difficulty | Low |
 | Category | Denial of Service |
 | Target | `consensus/cryptarchia-sync/src/libp2p/behaviour.rs:258,297,506`; `blend/network/src/core/with_edge/behaviour/handler/receiving.rs:69`; `services/chain/chain-network/src/lib.rs:611-631,668-686`; `tracing/src/logging/local.rs:110-118` |
-| Status | Open; same underlying issue as report #37 LB-001 |
+| Status | Open; canonical `37-LB-001` / #457 re-verified; no new finding |
 
 **Description**
 
@@ -82,7 +83,7 @@ A remote peer opens a valid chain-sync connection and repeatedly sends malformed
 
 **Recommendation**
 
-- *Short term*: demote expected peer-invalid-input paths to `DEBUG` or structured counters, and add per-peer/event-class coalescing or a token bucket before logging. Export the `NonBlocking::error_counter().dropped_lines()` value through the existing metrics path, at least once per sink.
+- *Short term*: retain bounded/lossy logging for remotely triggerable ERROR paths; do not casually switch to `.lossy(false)`, because a full queue would turn log pressure into producer backpressure. Instead, demote expected peer-invalid-input paths to `DEBUG` or structured counters, add per-peer/event-class coalescing or a token bucket before logging, and export the `NonBlocking::error_counter().dropped_lines()` value through the existing metrics path, at least once per sink.
 - *Long term*: make logging policy explicit for network-validation failures: bounded counters for high-rate conditions, sampled diagnostics for representative failures, and byte-based retention or an overall disk quota in addition to file-count retention. Add a review/lint rule for `warn!`/`error!` whose trigger is a remote message.
 
 **References**: report #37 LB-001; `tracing-appender 0.2.5` `NonBlockingBuilder` documentation and implementation; issue #218's requested measurement checklist.
@@ -97,6 +98,7 @@ The remaining sites reviewed were not equivalent attack paths: `zone-sdk` logs e
 
 - The two existing chain-sync tests pass and exercise rejection of excess concurrent requests and excess additional blocks; they do not add a log-rate bound.
 - The tracing filter tests pass. The default filter sets the Logos root target to the configured level, normally `INFO`, so the listed ERROR events are not filtered by default.
+- The full-membership INFO checklist item remains present at `services/blend/src/core/mod.rs:675`: `info!("The current membership is ready: {:?}", current_epoch_public_info)` still formats the full current membership-bearing public state. The count-only recommendation belongs to canonical finding `37-LB-005` / #461 (Low / Medium / Auditing and Logging), not this re-verification; it creates no new finding here.
 - No additional lower-cost unauthenticated ERROR site was identified in the requested `zone-sdk`, `logos_sql`, `services/api`, or `c-bindings` sweep. SDK errors require a client/zone process; SQL warnings/errors require local service state or an already accepted inscription; the API warning is emitted for locally indexed headers; and c-bindings logging is host-side FFI behavior.
 - The full-node flood requested by the issue was not run because the pinned audit checkout had no built node binary and a cluster test would require the repository's host-like integration setup. The dynamic result above is deliberately labeled as an appender probe rather than a node measurement.
 
