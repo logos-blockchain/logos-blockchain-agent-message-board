@@ -1,9 +1,9 @@
 # Malformed proof handling at the ZK verifier boundary
 
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/127`
-Target: `https://github.com/logos-blockchain/logos-blockchain` @ `a805329f8a186eb6989f09a7c49dee4a0e07473b` — component(s): `zk/circuits/verifier`, `zk/groth16`, `zk/proofs/{poq,poc,zksign}`, `blend/network`, `core/src/sdp`
+Target: `https://github.com/logos-blockchain/logos-blockchain` @ `a805329f8a186eb6989f09a7c49dee4a0e07473b` — component(s): `zk/circuits/verifier`, `zk/groth16`, `zk/proofs/{pol,poc,poq,zksign}`, `blend/network`, `core/src/proofs`, `core/src/sdp`, `ledger/src/cryptarchia`
 Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read in full: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`
-Date: `2026-09-19` — author: `Codex` — status: `draft`
+Date: `2026-09-19` — author: `Codex` — status: `final`
 
 This report answers issue #127 under parent issue #24. The parent identifies no narrower protocol specification for malformed proof handling, so the two core overview documents were used as the protocol context. The prior #29 sweep and #30 unsafe inventory were used as audit history; the interior-NUL observation in #30 was independently reproduced here and is reported under the intended follow-up issue #127.
 
@@ -12,7 +12,7 @@ This report answers issue #127 under parent issue #24. The parent identifies no 
 ## 1. Summary
 
 - Overall assessment: the node's network-reachable proof paths use fixed-size proof objects and return decode or verification errors for malformed proof material; the standalone Rapidsnark verifier wrapper has one panic-on-input edge case, but no current production node path calls that wrapper.
-- Findings: `0` critical · `0` high · `0` medium · `1` low · `0` informational
+- Findings: `0` critical · `0` high · `0` medium · `1` low (`127-LB-001`, new under #127) · `0` informational
 - Key themes: `fixed-size proof deserialization`, `error-returning Groth16 verification`, `FFI input validation`
 - Must-fix before launch: harden the standalone Rapidsnark verifier wrapper before any untrusted caller is allowed to use it; no current network-reachable node panic was established.
 
@@ -24,14 +24,16 @@ This report answers issue #127 under parent issue #24. The parent identifies no 
 |---|---|
 | `zk/circuits/verifier/src/{traits.rs,rapidsnark.rs}` | Public byte-slice verifier contract and the Rapidsnark adapter. |
 | `rust-rapidsnark` @ `e91187f8ccb5bbfc7bb00dac88169112428da78f` (`crates/src/lib.rs`) | The pinned Rust-to-native verification wrapper reached by `zk/circuits/verifier`. |
+| `core/src/proofs/leader_proof.rs`, `core/src/proofs/leader_claim_proof.rs` | Proof-of-Leadership block/uncle verification and leader-claim/PoC verification, including wire decoding and error-to-false handling. |
+| `ledger/src/cryptarchia/mod.rs` | Block and uncle leadership-proof application path. |
 | `zk/groth16/src/{proof,verifier}.rs` | Fixed-size compressed proof conversion, canonical point deserialization, and single/batch verification error boundaries. |
-| `zk/proofs/{poq,poc,zksign}` | Proof expansion, fixed public-input construction, and verification call sites. |
+| `zk/proofs/{pol,poc,poq,zksign}` | Proof expansion, fixed public-input construction, and verification call sites. |
 | `core/src/sdp/blend.rs` | Activity-proof wire decoding and fixed proof fields. |
 | `blend/network/src/core/poq_verification.rs` | Peer PoQ verification task and malformed-verification error handling. |
 
 **Out of scope**
 
-The cryptographic soundness of `ark-groth16`, arkworks serialization, the native Rapidsnark verifier implementation, circuit constraints, proving-key contents, and Poseidon2/Jellyfish internals were not re-audited. Those components were assumed correct except for the inspected Rust FFI argument-construction boundary. No full-node network or cluster test was run.
+The cryptographic soundness of `ark-groth16`, arkworks serialization, the native Rapidsnark verifier implementation, circuit constraints, proving-key contents, and Poseidon2/Jellyfish internals were not re-audited. The native implementation was exercised only through the isolated malformed-input subprocess matrix; the Rust FFI argument-construction boundary was inspected directly. No full-node network or cluster test was run.
 
 **Assumptions**
 
@@ -41,28 +43,55 @@ The pinned source and specification revisions are authoritative for this pass. T
 
 - Read issue #127, parent #24, the related #29 panic-sweep follow-up, and the prior #30 FFI inventory observation.
 - Read `bedrock-architecture-overview.md` and `overview-cryptoeconomics.md` in full at the pinned `logos-lips` revision. No narrower protocol document was identified by the parent issue.
+- Traced the Proof-of-Leadership block/uncle path through `Groth16LeaderProof::decode`, `CryptarchiaLedger::try_apply_header` / `verify_proof_of_leadership`, and `lb_pol::verify`; traced leader-claim proofs through `Groth16LeaderClaimProof::decode` and deferred `lb_poc::batch_verify`.
 - Traced peer activity-proof bytes through `ActivityProof::decode`, the fixed-size PoQ/PoSel fields, `spawn_poq_verification`, compressed Groth16 expansion, public-input construction, and `ark_groth16` verification.
 - Confirmed the workspace dependency boundary with a source search: `logos-blockchain-circuits-verifier` is a workspace member but has no production reverse dependency; the node's network proof path uses the Rust Groth16 verifier instead.
 - Ran `cargo +1.98.1 test -p logos-blockchain-circuits-verifier --lib`: 2 passed, 0 failed.
 - Ran `cargo +1.98.1 test -p logos-blockchain-core --lib sdp::blend`: 2 passed, 0 failed.
-- Ran a temporary standalone Cargo probe calling `Rapidsnark::verify(b"{}", b"{}", b"\0")`; it exited with panic code 101 at `rust-rapidsnark` `crates/src/lib.rs:323`.
+- Ran an isolated subprocess matrix against the pinned `rust-rapidsnark` `e91187f8ccb5bbfc7bb00dac88169112428da78f`: malformed proof JSON, malformed public-input JSON, valid JSON with wrong proof/input structure or lengths, malformed verification-key JSON, and an invalid curve/proof value all returned an error or `Ok(false)`; no abort, signal termination, or index-out-of-bounds result was observed. An interior-NUL proof exited with panic code 101 at `crates/src/lib.rs:323`, before the native call.
 - No upstream code was changed. No fuzzing, e2e run, or full-node malformed-message test was run.
 
 ### Clean-result summary
 
 - `ActivityProof` rejects unsupported versions and truncated input with `DecodeError`; its wire fields are fixed-size epoch, key, PoQ, and PoSel values.
 - `CompressedProof<Bn254>` is exactly 128 bytes. Its conversion to affine points uses canonical deserialization and returns `SerializationError` rather than unwrapping attacker-controlled lengths.
+- `Groth16LeaderProof` decodes a fixed-size PoL proof plus typed entropy, leader-key, and voucher-commitment fields. The block/uncle path builds typed `LeaderPublic` inputs and maps `lb_pol::verify` errors to `false`; `Groth16LeaderClaimProof` likewise decodes a fixed-size PoC proof and maps `lb_poc::verify` errors to `false` before its deferred batch path.
 - The node's single-proof Groth16 verifier maps verifier failures to `VerificationError`; the peer PoQ task handles both verification errors and blocking-task failure as a failed peer result.
 - The batch verifier contains `expect` calls and indexed public-input access, but the current PoQ/PoC/ZkSign callers supply fixed-size proof and public-input arrays. No malformed wire field was found that can change those lengths.
 - The standalone Rapidsnark adapter is the only validated panic-on-adversarial-byte path in the reviewed boundary, and it is not currently reachable from node network input.
+
+### Native FFI malformed-input matrix
+
+Each case was executed in a fresh subprocess so an abort or segmentation fault could not terminate the audit harness. The malformed JSON/shape cases reached the native verifier and returned an error; the invalid curve/proof case reached native verification and returned `Ok(false)`.
+
+| Case | Observed result |
+|---|---|
+| Malformed JSON proof | `Err(Proof verification failed: invalid proof data)` |
+| Malformed public-input JSON | `Err(Proof verification failed: invalid inputs data)` |
+| Valid JSON with wrong proof structure | `Err(Proof verification failed: invalid proof data)` |
+| Valid JSON with wrong public-input length | `Err(Proof verification failed: invalid inputs data)` |
+| Malformed verification key JSON | `Err(Proof verification failed: invalid verification key data)` |
+| Invalid curve/proof value | `Ok(false)` |
+| Interior NUL in proof | Rust panic, exit `101`, at `rust-rapidsnark` `crates/src/lib.rs:323`; this fails before native verification |
+
+This matrix did not observe an assertion, abort, signal, or index-out-of-bounds failure for the NUL-free native-boundary cases. It does not establish that every possible native malformed input is safe; it establishes the requested representative boundary behavior and preserves the separately reported Rust-wrapper panic.
+
+### Public-input canonicality
+
+| Production path | Public-input construction | Canonicality result |
+|---|---|---|
+| PoL block/uncle proof | `Groth16LeaderProof::verify` derives a typed `PolVerifierInput` from `LeaderPublic` state, slot/nonce/lottery values, and the typed Ed25519 leader key; `PolVerifierInput::to_inputs` returns a fixed `[Fr; 9]`. | Derived from strongly typed values; no attacker-controlled JSON reaches the verifier. `Fr` values are canonical at construction. |
+| Leader claim / PoC | `LeaderClaimOp::verify` constructs typed `PoCVerifierInput` from the checked voucher nullifier/root and transaction hash; `to_inputs` returns a fixed `[Fr; 3]`. | Derived from strongly typed ledger values; no direct attacker-byte public-input parser is used in production. |
+| Blend PoQ | `RealProofsVerifier` combines current epoch state and the typed signing key with the proof's fixed-size key nullifier; `PoQVerifierInputData` converts to fixed typed `Groth16Input` values, while `ProofOfQuota::decode` parses the nullifier with canonical `fr_from_bytes`. | Public inputs are derived internally and parsed as canonical field elements; attacker bytes cannot choose the public-input vector length. |
+| ZkSign | Operation verification derives `ZkSignVerifierInputs` from the typed transaction hash and declaration/public keys; `as_inputs` returns a fixed `[Fr; 33]`. | Derived from strongly typed values and canonical field wrappers; no raw attacker-controlled public-input JSON is accepted on the node path. |
 
 ## 4. Findings
 
 | ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
-| LB-001 | Standalone Rapidsnark verifier panics on interior-NUL input | Denial of Service | Low | High | Open; not currently reachable from the node |
+| 127-LB-001 | Standalone Rapidsnark verifier panics on interior-NUL input | Denial of Service | Low | High | Open; not currently reachable from the node |
 
-### LB-001 · Standalone Rapidsnark verifier panics on interior-NUL input
+### 127-LB-001 · Standalone Rapidsnark verifier panics on interior-NUL input
 
 | | |
 |---|---|
@@ -84,7 +113,7 @@ let inputs_cstr = std::ffi::CString::new(inputs).unwrap();
 let verification_key_cstr = std::ffi::CString::new(verification_key).unwrap();
 ```
 
-An interior NUL therefore panics instead of producing the `Result<bool, io::Error>` promised by the `Verifier` trait. The temporary probe passed `b"{}"` as the verification key and public inputs and `b"\0"` as the proof; it reproduced `NulError(0, [0])` and process exit 101 at line 323.
+An interior NUL therefore panics instead of producing the `Result<bool, io::Error>` promised by the `Verifier` trait. The subprocess matrix passed valid-UTF-8 proof bytes containing an interior NUL and reproduced `NulError` and process exit 101 at line 323.
 
 This is not a current remote node-crash finding. The workspace search found no production crate that depends on `logos-blockchain-circuits-verifier`; its only references are the verifier crate itself and its README/test target. The node's peer PoQ path instead decodes fixed-size proof fields, expands them with `TryFrom`, and calls the Rust `ark-groth16` verifier. Thus an adversarial peer can reach malformed proof bytes in the node path, but no path from those bytes to these `CString::new(...).unwrap()` calls was identified at `a805329f`.
 
