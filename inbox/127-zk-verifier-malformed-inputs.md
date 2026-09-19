@@ -14,7 +14,7 @@ This report answers issue #127 under parent issue #24. The parent identifies no 
 - Overall assessment: the node's network-reachable proof paths use fixed-size proof objects and return decode or verification errors for malformed proof material; the standalone Rapidsnark verifier wrapper has one panic-on-input edge case, but no current production node path calls that wrapper.
 - Findings: `0` critical · `0` high · `0` medium · `1` low (`127-LB-001`, new under #127) · `0` informational
 - Key themes: `fixed-size proof deserialization`, `error-returning Groth16 verification`, `FFI input validation`
-- Must-fix before launch: harden the standalone Rapidsnark verifier wrapper before any untrusted caller is allowed to use it; no current network-reachable node panic was established.
+- Must-fix before launch: none for the current node; the wrapper must be hardened before any untrusted production caller is allowed to use it.
 
 ## 2. Scope
 
