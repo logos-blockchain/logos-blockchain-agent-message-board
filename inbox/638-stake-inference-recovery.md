@@ -14,7 +14,7 @@ Date: `2026-09-21` — author: `Codex` — status: `final`
 - Key themes: `stake-inference floor`, `lottery approximation outside its monotone range`, `post-halt recovery load`
 - Must-fix before launch: preserve the existing `44-LB-001` remediation priority and bound the empty-window recovery behavior before treating the finding as closed.
 
-This iteration does not create a new independent finding or reclassify the canonical record. It re-verifies `44-LB-001`, filed as issue `#716`, retaining `Medium` severity, `High` difficulty, and `Consensus` category. It adds a host-like short-epoch three-node restart probe and a scratch bounded-decrease prototype. The private dust-note race and direct PoL/PoQ load measurements remain explicit follow-ups.
+This iteration does not create a new independent finding or reclassify the canonical record. It re-verifies `44-LB-001`, filed as issue `#716`, retaining `Medium` severity, `High` difficulty, and `Consensus` category. It is a partial result: it adds a host-like short-epoch three-node stop/restart run and a scratch bounded-decrease prototype. The run demonstrates that the pinned host-like harness can execute the controlled stop/restart scenario and shows divergent post-restart progress. It did not capture `new_total_stake`, winner counts per slot, blocks received per slot, tip growth per slot, or proof workload, so it does not by itself dynamically confirm the `D = 1` recovery mechanism. The private dust-note race and direct PoL/PoQ load measurements remain explicit follow-ups.
 
 ## 2. Scope
 
@@ -47,7 +47,7 @@ The pinned Cryptarchia and Proof-of-Leadership specifications are authoritative.
 - Automated tooling: scratch ledger tests covered the empty-density inference, skipped-epoch state, and bounded-decrease model. The prior `#44` targeted node tests and standalone lottery model remain prior evidence from the same target revision and were not relabeled as new measurements.
 - Dynamic testing: a host-like pinned-revision local three-node probe used one-second slots, one-slot epoch phase parameters, `security_param=2`, and `slot_activation_coeff=1/2`. It stopped all nodes for 15 seconds, restarted their persisted state, sampled immediately, and sampled again after ten seconds of resumed operation.
 
-### Dynamic confirmation and bounded-recovery prototype
+### Restart harness and bounded-recovery prototype
 
 The scratch bounded-recovery prototype was run with:
 
@@ -72,7 +72,7 @@ The successful settled run captured these exact anchors. Before stopping, node 0
 
 Immediately after restart, node 0 was at height 1 with tip/LIB `bcda2e8909f127f9d1d3fd6d1533c79dd29590e6d0c06af532451b77054b061d`; nodes 1 and 2 retained the above height/tip observations. Ten seconds later, node 0 was height 9 / slot 38 / LIB slot 36 with tip `b4450abf511dbe2bc51f8738b21275e24dcd016f1f5b1f8f4bca68df9b652690` and LIB `40faf056d68b5006ae5b71511fdd449d3cb6b272151c65e538411225a547edb7`; node 1 was height 11 / slot 37 / LIB slot 34 with tip `8bad9ab3a561b3ceedc7ca9135c9309f29ffae8fa8f73131400ecce5f2652307` and LIB `060c9ba652f8ea5f3f8117c322a0d498050b0512627a33130f9a53e2854993f0`; node 2 was height 9 / slot 39 / LIB slot 35 with tip `48e36683733f038fa14312340f6c682ef3eb78ede70acb6aa92ac8ee03664455c` and LIB `1eb681e19ac6fdaca73f8f2e9c0ad50a5277077d5fc46cab9b74c0f927c20856`.
 
-The run therefore demonstrates the requested controlled restart and measurable post-restart tip/LIB divergence in the pinned harness. It does not by itself prove the private dust-note race or quantify PoL/PoQ proof-generation and verification load; those remain separate follow-ups.
+The run demonstrates that the pinned host-like harness can execute the controlled stop/restart scenario and shows divergent post-restart progress. It did not capture `new_total_stake`, winner counts per slot, blocks received per slot, tip growth per slot, or proof workload, so it does not by itself dynamically confirm the `D = 1` recovery mechanism. It does not prove the private dust-note race or quantify PoL/PoQ proof-generation and verification load; those remain separate follow-ups.
 
 ## 4. Findings
 
@@ -126,7 +126,7 @@ The prior `#44` report measured the node's own `check_winning` over 20,000 slots
 
 ### S-001 · Complete the recovery race experiment
 
-The short-epoch restart probe is now complete for tip/LIB observations. Add a controlled private dust-note created in the last pre-halt block, then trace its presence through the synthesized epoch state, PoL aged root, first post-restart proof, and fork choice. Record the `epoch transition` / `skipped epochs` values, winners per slot, blocks received per slot, and exact note/nonce anchors.
+The short-epoch restart probe is complete only for harness execution and tip/LIB observations; it does not dynamically confirm the `D = 1` recovery mechanism. Add a controlled private dust-note created in the last pre-halt block, then trace its presence through the synthesized epoch state, PoL aged root, first post-restart proof, and fork choice. Record the `new_total_stake`, winners per slot, blocks received per slot, tip growth per slot, proof workload, `epoch transition` / `skipped epochs` values, and exact note/nonce anchors.
 
 ### S-002 · Measure the actual leader and verifier work
 
