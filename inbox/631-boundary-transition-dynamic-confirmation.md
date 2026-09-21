@@ -14,7 +14,7 @@ Date: `2026-09-21` — author: `Codex` — status: `final`
 - Key themes: `unbounded consensus-state recomputation`, `proof reuse across distinct headers`, `missing transition-result cache`
 - Must-fix before launch: preserve the existing `178-LB-001` remediation priority and bound repeated boundary-transition work before treating the finding as closed.
 
-This iteration does not introduce a new independent finding or reclassify the canonical record. It re-verifies `178-LB-001` as tracked by issue #708, retaining its existing `High` severity, `Medium` difficulty, and `Denial of Service` category. It adds a pinned-revision short-epoch network probe that produced competing tips, plus a scratch `(parent id, new epoch)` cache prototype with a measured transition-only speedup. Packet-level admission tracing and production integration of the cache remain follow-ups.
+This iteration does not introduce a new independent finding or reclassify the canonical record. It re-verifies `178-LB-001` as tracked by issue #708, retaining its existing `High` severity, `Medium` difficulty, and `Denial of Service` category. It adds a scratch `(parent id, new epoch)` cache prototype with a measured transition-only speedup. The requested same-parent/same-slot boundary-block network reproduction, packet-level admission tracing, and production integration of the cache remain follow-ups.
 
 ## 2. Scope
 
@@ -31,7 +31,7 @@ This iteration does not introduce a new independent finding or reclassify the ca
 
 **Out of scope**
 
-The live probe did not inject externally crafted raw blocks or instrument every gossipsub, reconstruction, queue, and memory metric requested by issue #631. The cache was a scratch test-harness prototype, not a production implementation. Consensus cryptography and third-party networking implementations were not independently re-audited. No circuit code was in scope.
+The requested dynamic network experiment was not run: no externally crafted raw blocks were injected, and gossipsub, reconstruction, queue, and memory metrics were not instrumented. The cache was a scratch test-harness prototype, not a production implementation. Consensus cryptography and third-party networking implementations were not independently re-audited. No circuit code was in scope.
 
 **Assumptions**
 
@@ -43,9 +43,8 @@ The pinned Cryptarchia, reward-distribution, and fork-choice specifications are 
 - Re-read the core Bedrock architecture and Cryptoeconomics specifications, then read the pinned `cryptarchia-v1-protocol.md`, `bedrock-service-reward-distribution.md`, and `fork-choice.md` at the revisions listed above.
 - Manually inspected the pinned target revision with `git show`, `git grep`, and `git blame`, following the path from network admission to `ChainService::try_apply_block_with_state_retention`, `Ledger::prepare_update`, epoch-state construction, reward insertion, and consensus acceptance.
 - Automated tooling: a scratch ledger test measured repeated boundary-transition work against a keyed cached result.
-- Dynamic testing: a host-like pinned-revision local three-node probe used one-second slots and short epoch parameters. It captured exact tip/LIB observations before restart, immediately after an empty-window restart, and after a ten-second settled window. The probe was run from `/tmp/logos-blockchain-audit-9ff`; no source-repository changes were made.
 
-### Dynamic confirmation and cache prototype
+### Cache prototype
 
 The scratch cache test was run with:
 
@@ -56,14 +55,6 @@ It evaluated 32 repeated `update_epoch_state` transitions for the same synthetic
 `BOUNDARY_CACHE candidates=32 cold_ns=171753 cached_ns=26961 cold_per_candidate_ns=5367 cached_per_candidate_ns=842`
 
 This is approximately a 6.4× reduction in this transition-only scratch loop; it is not a node-level CPU or memory benchmark and does not bypass candidate-specific validation.
-
-The host-like local-network probe was run with:
-
-`source ~/Code/logos/set_paths.sh && cargo test -p logos-blockchain-tests --test test_cli_restart research_empty_inference_window_restart_probe -- --nocapture`
-
-On the successful run, before stopping the three nodes, nodes 0 and 1 reported height 3, slot 13, tip `375bf59c6eeaaaa82a17f08d643158d0f8f5d564f272311af2243cc3739b8622`; node 2 reported height 3, slot 8, tip `b30a8f1b2c1426c9a08d1b7cf79a4a8eaa8e0d570c8c83135da04c16df00262c`. All three reported LIB `d698b9ff2f85af9d28eecb192d5162f6430645bf4e2e78c85b6b60af9f3a8c52`, demonstrating competing observed tips above a shared LIB in the short-epoch network. The test did not claim that this observation alone proves a same-parent/same-slot equivocation or trace the candidate through every network stage.
-
-The same controlled restart probe passed after stopping all nodes for 15 seconds and restarting the persisted nodes. In a later settled sample, ten seconds after restart, nodes 0/1/2 reported heights 9/11/9 and distinct tips and LIBs (`b4450abf...`/`40faf056...`, `8bad9ab3...`/`060c9ba6...`, and `48e36683...`/`1eb681e1...`, respectively). This demonstrates that the low-density restart setup can produce divergent post-restart progress in the harness; it is evidence for the recovery experiment in issue #638, not a new finding for this issue.
 
 ## 4. Findings
 
@@ -106,7 +97,7 @@ An eligible leader or a party able to relay multiple valid candidate blocks caus
 
 ### S-001 · Complete the network-path benchmark
 
-Extend the passing short-epoch probe with controlled multiple candidates sharing one eligible parent and instrument per-node transition latency, CPU, memory, queue depth, block IDs, parent IDs, transition epochs, LIB movement, and whether candidates are dropped before or after ledger application. The present probe demonstrates competing tips above a shared LIB but does not yet establish the complete gossipsub → reconstruction → chain-service path for a crafted same-parent boundary set.
+Run a controlled boundary experiment that creates `N` valid blocks on one pre-boundary parent/slot, varies `voucher_cm`, and traces the exact candidate IDs through gossipsub → reconstruction → chain service. Measure repeated `try_apply_block_with_state_retention`, per-node transition latency, CPU, queue delay, retained memory, block IDs, parent IDs, transition epochs, and whether candidates are dropped before or after ledger application. Establish the usable pre-boundary parent range before interpreting the result.
 
 ### S-002 · Confirm network-path and orphan behavior
 
@@ -120,6 +111,6 @@ Integrate the proposed `(parent id, new epoch)` cache in a scratch node branch. 
 
 ## Appendix A — Classification basis
 
-The `High` / `Medium` / `Denial of Service` classification is preserved from canonical finding `178-LB-001` in issue `#708`. Under `docs/REPORT_TEMPLATE.md`, High covers a remote DoS requiring significant resources, timing, or a second weakness; Medium covers realistic high-cost or multi-peer degradation. The new dynamic evidence supports the existing classification but does not warrant a severity or difficulty change. The report remains an independent re-verification of the canonical finding, not a new finding.
+The `High` / `Medium` / `Denial of Service` classification is preserved from canonical finding `178-LB-001` in issue `#708`. Under `docs/REPORT_TEMPLATE.md`, High covers a remote DoS requiring significant resources, timing, or a second weakness; Medium covers realistic high-cost or multi-peer degradation. The cache prototype supports the existing classification but does not warrant a severity or difficulty change. The report remains an independent re-verification of the canonical finding, not a new finding.
 
 Draft pending independent review and explicit approval.
