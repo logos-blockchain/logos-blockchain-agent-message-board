@@ -3,16 +3,16 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/647`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `9ffddb30b9e6cf79465802953caedd010ff1cecd` — component(s): `services/wallet`, `services/sdp`, `core/src/mantle/ops/sdp`, `nodes/node/binary`, `services/blend`, `libp2p`
 Specs: `https://github.com/logos-co/logos-lips` @ `75d3d0382604d4a0d8e246c268935dd386ffc8ea` — read: `bedrock-service-declaration-protocol.md`, `key-types-and-generation.md`, relevant membership and connection sections of `blend-protocol.md`, `bedrock-v1.1-mantle-specification.md` § “Zero Knowledge Signature Scheme (ZkSignature)”
-Date: `2026-09-21` — author: `Codex (research agent)` — status: `draft`
+Date: `2026-09-21` — author: `Codex (research agent)` — status: `final`
 
 ---
 
 ## 1. Summary
 
-- Overall assessment: the requested local experiment independently confirms the canonical #65 `LB-001`: an unauthenticated caller can obtain a valid Ed25519 signature from the KMS-backed Blend provider key and submit a declaration that claims that provider id with attacker-chosen locators and a different ZK key.
-- Findings: `0` critical · `0` high · `0` medium · `0` new low · `0` informational; existing `LB-001` from issue #65 independently re-verified and remains open/Low.
+- Overall assessment: the requested local experiment independently confirms canonical `65-LB-001` / issue `#725`: an unauthenticated caller can obtain a valid Ed25519 signature from the KMS-backed Blend provider key and submit a declaration that claims that provider id with attacker-chosen locators and a different ZK key.
+- Findings: `0` critical · `0` high · `0` medium · `0` new low · `0` informational; existing `65-LB-001` / `#725` independently re-verified and remains open/Low.
 - Key themes: provider-id authorization is delegated to an unrestricted wallet signing endpoint; declaration uniqueness prevents a later same-service duplicate but does not protect the first squatting declaration; libp2p transport identity signatures are not the same as the SDP provider signature.
-- Must-fix before launch: the existing #65 `LB-001` and its API-reachability prerequisite (#325) remain applicable; no new independent finding is filed here.
+- Must-fix before launch: the existing `65-LB-001` / `#725` and its API-reachability prerequisite (#325) remain applicable; no new independent finding is filed here.
 
 ## 2. Scope
 
@@ -36,7 +36,7 @@ Date: `2026-09-21` — author: `Codex (research agent)` — status: `draft`
 
 **Assumptions**
 
-- The issue’s API threat model and the canonical #65 classification are retained: the HTTP wallet API is reachable by the attacker, and the attacker does not already possess the protected KMS secrets.
+- The issue’s API threat model and the canonical `65-LB-001` / `#725` classification are retained: the HTTP wallet API is reachable by the attacker, and the attacker does not already possess the protected KMS secrets.
 - The pinned LIPs revision is authoritative for SDP provider-id/zk-id uniqueness and the ZkSignature input rules.
 
 ## 3. Method
@@ -51,9 +51,9 @@ Date: `2026-09-21` — author: `Codex (research agent)` — status: `draft`
 
 | ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
-| `LB-001` (canonical from #65) | Unrestricted KMS signing permits provider-id squatting | Access Controls / Authentication | Low | Low | Open; independently re-verified |
+| `65-LB-001 / #725` | Unrestricted KMS signing permits provider-id squatting | Access Controls | Low | Low | Open; independently re-verified |
 
-### Existing `LB-001` from #65 — Unrestricted KMS signing permits provider-id squatting
+### `65-LB-001 / #725` — Unrestricted KMS signing permits provider-id squatting
 
 This is an independent end-to-end re-verification of the surviving canonical finding, not a new finding number and not a reclassification.
 
@@ -61,9 +61,9 @@ This is an independent end-to-end re-verification of the surviving canonical fin
 |---|---|
 | Severity | Low |
 | Difficulty | Low |
-| Category | Access Controls; Authentication |
+| Category | Access Controls |
 | Target | `services/wallet/src/lib.rs:919-949`, `nodes/node/binary/src/api/handlers.rs:2068-2180`, `core/src/mantle/ops/sdp/declare.rs:174-225` |
-| Status | Open; canonical finding from issue #65, independently re-verified here |
+| Status | Open; canonical finding `65-LB-001` / `#725`, independently re-verified here |
 
 **Description**
 
@@ -79,7 +79,7 @@ The current declaration validator does enforce one `provider_id` and one `zk_id`
 4. A second request used the same provider id with ZK id `cce9796339efd968df9cd463bc2248e4b29c86409496e8b2599da8c4c1074d22`, service note `ac541e...`, and locator `/ip4/127.0.0.1/udp/23406/quic-v1`. It returned declaration id `c3ef4e05228740f79a98250bee3af3223fa67216173606d856833d8465caf062` and transaction hash `ed5d39db4dc87b408985fd493f969ff4d058ba64259105c94e7ee28950df640c`.
 5. At shutdown, the isolated node’s mempool still listed the second transaction and the SDP ledger still contained only the first `aa70...` declaration. The node stopped advancing after the first inclusion, so this run did not obtain a second block-level rejection record. Static validation at `core/src/mantle/ops/sdp/declare.rs:109-132` identifies the deterministic result if included: `SdpError::DuplicateProviderId` for the same service. This limitation does not affect the first on-chain acceptance that re-verifies the finding.
 
-The same node returned `200` for `POST /wallet/sign/ed25519` with provider id `aa70...` over the 32-byte ASCII message `THIS-IS-NOT-A-MANTLE-TX-HASH-32B`; the returned signature matched the prior #65 evidence. It also returned `200` for `POST /wallet/sign/zk` with Blend ZK id `852efb444db8c3c811625850df39425f43aeffc69571192c0be9f72523256e0a` over that arbitrary hash.
+The same node returned `200` for `POST /wallet/sign/ed25519` with provider id `aa70...` over the 32-byte ASCII message `THIS-IS-NOT-A-MANTLE-TX-HASH-32B`; the returned signature matched the prior canonical `65-LB-001` / `#725` evidence. It also returned `200` for `POST /wallet/sign/zk` with Blend ZK id `852efb444db8c3c811625850df39425f43aeffc69571192c0be9f72523256e0a` over that arbitrary hash.
 
 The Blend runtime query returned one local node and `core_info: null`; no peer B was available to complete a dial. The stored locator therefore did not confer network authentication on the absent endpoint. If B serves that address with B’s own libp2p identity, QUIC/TLS authenticates B’s peer id, not A’s provider id, and the connection does not become an authenticated A connection. The chain nevertheless advertises the misleading A-completed locator to consumers of the declaration.
 
@@ -105,10 +105,10 @@ The Blend swarm constructs its libp2p identity directly from `non_ephemeral_sign
 
 **Recommendation**
 
-- *Short term*: apply the existing #65 recommendation: authenticate the wallet API and enforce a KMS key-usage policy so provider/network identity keys cannot be selected by generic wallet signing requests. Do not load the libp2p or Blend identity secrets into an API-reachable generic signing authority.
+- *Short term*: apply the existing `65-LB-001` / `#725` recommendation: authenticate the wallet API and enforce a KMS key-usage policy so provider/network identity keys cannot be selected by generic wallet signing requests. Do not load the libp2p or Blend identity secrets into an API-reachable generic signing authority.
 - *Long term*: represent key roles in the KMS and make each protocol operation request a typed role rather than an arbitrary public-key id. Add an integration test that starts with an unused provider id, submits a declaration with foreign locators, confirms inclusion, and checks that a second same-service provider-id declaration is rejected with `DuplicateProviderId`.
 
-**References**: issue #65 report `processed/65-kms-key-roles-import-derivation.md` LB-001; `bedrock-service-declaration-protocol.md` provider-id signature and identifier-uniqueness sections; `key-types-and-generation.md` NSK/provider-id role; `blend-protocol.md` connection authentication and locator completion; `bedrock-v1.1-mantle-specification.md` ZkSignature section.
+**References**: canonical `65-LB-001` / issue `#725`, report `processed/65-kms-key-roles-import-derivation.md`; `bedrock-service-declaration-protocol.md` provider-id signature and identifier-uniqueness sections; `key-types-and-generation.md` NSK/provider-id role; `blend-protocol.md` connection authentication and locator completion; `bedrock-v1.1-mantle-specification.md` ZkSignature section.
 
 ## 5. Suggestions (non-security)
 
@@ -130,4 +130,4 @@ The Blend swarm constructs its libp2p identity directly from `non_ephemeral_sign
 
 Source issue disposition: leave issue #647 assigned and open while this report awaits independent review; no tracker or post-merge action is part of this Research Workflow iteration.
 
-Draft pending independent review and explicit approval.
+Independent review completed; this report is finalized for the Draft PR handoff.
