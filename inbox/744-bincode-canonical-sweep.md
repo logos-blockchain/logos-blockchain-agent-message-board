@@ -3,7 +3,7 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/744`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `85a1620805e8b5697728a22abb9fbe6760145c21` — component(s): core block/header and canonical codecs, Mantle transaction hashing, SDP reward construction, Blend and sync message serialization
 Specs: `https://github.com/logos-co/logos-lips` @ `6637c791cf29985251bf67f73766f97c7512f824` — read: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md`, `network-wire-format.md`, `mantle-transaction-encoding.md`; consulted: `bedrock-v1.1-block-construction.md`, `bedrock-service-reward-distribution.md`, `cryptarchia-v1-protocol.md`, and `blend-protocol.md`
-Date: `2026-09-23` — author: `codex` — status: `draft`
+Date: `2026-09-23` — author: `codex` — status: `final`
 
 ---
 
@@ -85,6 +85,10 @@ There is no direct unauthenticated exploit against the current one-service netwo
 The sweep independently reverified the existing #641 S-003 concern: `Header::sign` uses `header.to_bytes()` (`core/src/header/mod.rs:227-230`) and `verify_header_signature` verifies those same configured-bincode bytes (`core/src/block/mod.rs:369-375`), while the specification defines the canonical 297-byte Header encoding. At the pinned target, the current fixed-width little-endian bincode representation happens to equal the canonical Header representation for the present fields, and the core test suite passes. That equality is not enforced by the type or a regression test that compares the two encodings.
 
 This report does not assign a second finding identifier. The canonical record remains #641 S-003, with its existing classification and history preserved. Add a direct equality test or, preferably, make signing and verification call the canonical encoder explicitly. The same review found that proposal/body-root and Mantle transaction hash paths already use `BinaryEncode`, while Blend transaction and sync bincode uses are transport/storage envelopes rather than hash or signature preimages.
+
+The settings that could break the current Header-byte coincidence are specific. Switching the configured bincode endianness from little-endian to big-endian would change the integer fields, including `Slot`, relative to their canonical little-endian encodings. Switching from fixed-integer to varint encoding would change at least the `Slot(u64)` representation from its canonical fixed eight bytes to a variable-length representation. The current Header has a fixed shape: its fields are a one-byte version, fixed-size identifiers, a fixed-width slot, and a fixed-size proof, so it has no sequence or string length prefixes. If a sequence/string-like field were added and serialized through serde, configured fixint bincode would prefix its length with an eight-byte integer; that must not be presumed canonical. There is no optional Header field today; adding one through serde would introduce bincode's option discriminant and likewise require an explicit canonical-format check.
+
+These alternatives are not runtime-configurable in this target. `binary-codec/src/bincode/config.rs:22-43` constructs one global `OPTIONS` value with `.with_little_endian()` and `.with_fixint_encoding()`; callers do not select endianness or integer encoding. The mismatch risk therefore requires a source/configuration change or a Header-shape change. The current match is an implementation coincidence guarded only by these hard-coded settings and the present fixed field layout, not an enforced canonical-encoding invariant.
 
 ---
 
