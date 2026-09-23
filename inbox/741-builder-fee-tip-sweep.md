@@ -3,16 +3,16 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/741`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `85a1620805e8b5697728a22abb9fbe6760145c21` — component(s): `services/chain/chain-leader`, `services/wallet`, `services/tx-service`, `services/chain/chain-network`, `zone-sdk`, `ledger`
 Specs: `https://github.com/logos-co/logos-lips` @ `6637c791cf29985251bf67f73766f97c7512f824` — read: `execution-market.md` (Overview, Notation, Block Builder Mechanism, Fee Distribution); `bedrock-anonymous-leaders-reward.md` (Claiming the reward, Leaders Reward); `bedrock-v1.1-mantle-specification.md` (LEADER_CLAIM, Gas Determination)
-Date: `2026-09-23` — author: `codex` — status: `draft`
+Date: `2026-09-23` — author: `codex` — status: `final`
 
 ---
 
 ## 1. Summary
 
 - Overall assessment: the requested builder sweep found no independent new canonical finding, but independently reverified the open exact-fee and stateless-mempool defects and extended the exact-fee evidence from PoW claims to leader claims and Zone SDK channel transactions.
-- Findings: `0` critical · `0` high · `0` medium · `0` low · `0` informational new IDs; `#636 LB-005` and `#113 LB-004` are reverified and remain open.
+- Findings: `0` critical · `0` high · `0` medium · `0` low · `0` informational new IDs; `636-LB-005` and `113-LB-004 / #316` are reverified and remain open.
 - Key themes: signed transactions carry no explicit execution-gas-price cap; builder funding and retry policy determine how long a transaction remains includable; mempool admission acknowledges storage rather than inclusion and never reports later eviction to the submitter.
-- Must-fix before launch: no new item. The existing fixes for `#636 LB-005` (fresh-fee rebuilds) and `#113 LB-004` (stateful admission and terminal eviction) remain applicable to the paths reviewed here.
+- Must-fix before launch: no new item. The existing fixes for `636-LB-005` (fresh-fee rebuilds) and `113-LB-004 / #316` (stateful admission and terminal eviction) remain applicable to the paths reviewed here.
 
 ## 2. Scope
 
@@ -37,12 +37,13 @@ Date: `2026-09-23` — author: `codex` — status: `draft`
 
 - The target and specification revisions pinned above are authoritative. The exact target was inspected in `/tmp/logos-blockchain-744`; its working tree was clean before and after inspection.
 - A transaction accepted by the mempool is not proof of inclusion. Existing canonical finding classifications and identifiers are preserved unless this review found an independent end-to-end defect.
+- `113-LB-004 / #316` names canonical finding 113-LB-004 as filed under issue #316; issue #113 is provenance/context, not the canonical issue number for that finding.
 
 ## 3. Method
 
 - Manually traced the four issue areas from every builder to funding, signing, posting, block selection, removal, and retry.
 - Compared the implementation with the pinned execution-market algorithm: filter by `c_t >= b_exec`, sort by revenue/priority fee, and greedily pack valid transactions; and with the pinned Mantle `LEADER_CLAIM` validation/execution rules.
-- Resolved overlap against the existing canonical records before assigning any ID: `#636 LB-005`, `#113 LB-004`, `#47 S-001`, and `#113 S-002`. No fresh `LB-NNN` was assigned.
+- Resolved overlap against the existing canonical records before assigning any ID: `636-LB-005`, `113-LB-004 / #316`, `#47 S-001`, and `#113 S-002`. No fresh `LB-NNN` was assigned.
 - Automated validation at the exact target revision: `cargo test -p logos-blockchain-ledger --lib test_leader_claim_operation` — 1 passed; `cargo test -p logos-blockchain-ledger --lib test_priority_fees_go_to_leader` — 1 passed. `git diff --check` was clean.
 - Dynamic testing: none. The two unit tests exercise the relevant ledger paths; no network or cluster behaviour was required to establish the source-level results.
 
@@ -50,10 +51,10 @@ Date: `2026-09-23` — author: `codex` — status: `draft`
 
 | Canonical ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
-| `#636 LB-005` (reverified and extended) | The claim fee is the exact minimum at the build tip, so a base-fee increase before inclusion invalidates it | Economic / Incentive | Low | Low | Open |
-| `#113 LB-004` (reverified) | No stateful check at admission: never-includable transactions remain in mempools and are filtered only by trial execution | Denial of Service | Medium | Low | Open |
+| `636-LB-005` (reverified and extended) | The claim fee is the exact minimum at the build tip, so a base-fee increase before inclusion invalidates it | Economic / Incentive | Low | Low | Open |
+| `113-LB-004 / #316` (reverified) | No stateful check at admission: never-includable transactions remain in mempools and are filtered only by trial execution | Denial of Service | Medium | Low | Open |
 
-### #636 LB-005 — Reverified and extended to leader claims and Zone SDK transactions
+### 636-LB-005 — Reverified and extended to leader claims and Zone SDK transactions
 
 | | |
 |---|---|
@@ -61,7 +62,7 @@ Date: `2026-09-23` — author: `codex` — status: `draft`
 | Difficulty | Low |
 | Category | Economic / Incentive |
 | Target | `services/chain/chain-leader/src/lib.rs:789-812`; `services/wallet/src/lib.rs:1381-1447`; `zone-sdk/src/sequencer/tx_builder.rs:30-59`, `zone-sdk/src/sequencer/zone_sequencer.rs:1512-1545` |
-| Status | Open; canonical finding `#636 LB-005` |
+| Status | Open; canonical finding `636-LB-005` |
 
 **Description**
 
@@ -81,16 +82,16 @@ The generic wallet `FundTx` path and tx-service likewise have no transaction-bui
 
 During a rising execution base fee, a manually triggered leader claim is built with exactly the current mandatory fee and posted once. If it is not included before the next price increase, ledger balance validation rejects it and the local mempool removes it. If the epoch boundary changes the voucher snapshot root first, the same signed transaction is rejected for the root mismatch. The operator must invoke the claim again; the chain-leader helper does not rebuild automatically. Zone SDK channel transactions normally have a 12% reserve and periodic retries, but a sufficiently large fee movement or any terminal rejection leaves the same signed transaction to fail repeatedly until application-level recovery.
 
-This does not create a new canonical finding beyond `#636 LB-005`: the source-level cause and classification are the same exact-fee/rebuild gap, and the report extends its evidence to the other builders requested by #741.
+This does not create a new canonical finding beyond `636-LB-005`: the source-level cause and classification are the same exact-fee/rebuild gap, and the report extends its evidence to the other builders requested by #741.
 
 **Recommendation**
 
 - *Short term*: rebuild claim and channel transactions from the latest tip after a terminal mempool rejection, re-reading the voucher root, ledger prices, spendable inputs, and channel parent. Distinguish invalid/rejected responses from transport failure so a terminal transaction is not retried unchanged.
 - *Long term*: implement an explicit transaction fee-cap/priority representation consistent with `execution-market.md`, and make builder ordering and admission consume the same fee model. Keep the reserve as a wallet policy, not as a substitute for `c_t`.
 
-**References**: `execution-market.md` › Overview, › Notation, › Block Builder Mechanism, › Fee Distribution; `bedrock-anonymous-leaders-reward.md` › Claiming the reward, › Leaders Reward; `bedrock-v1.1-mantle-specification.md` › LEADER_CLAIM; canonical `#636 LB-005`.
+**References**: `execution-market.md` › Overview, › Notation, › Block Builder Mechanism, › Fee Distribution; `bedrock-anonymous-leaders-reward.md` › Claiming the reward, › Leaders Reward; `bedrock-v1.1-mantle-specification.md` › LEADER_CLAIM; canonical `636-LB-005`.
 
-### #113 LB-004 — Reverified: admission and eviction still have no submitter feedback
+### 113-LB-004 / #316 — Reverified: admission and eviction still have no submitter feedback
 
 | | |
 |---|---|
@@ -98,7 +99,7 @@ This does not create a new canonical finding beyond `#636 LB-005`: the source-le
 | Difficulty | Low |
 | Category | Denial of Service |
 | Target | `services/tx-service/src/tx/service.rs:393-434`, `:527-571`; `services/tx-service/src/backend/pool.rs:176-218`; `services/chain/chain-leader/src/tx_selection.rs:135-160`, `services/chain/chain-leader/src/lib.rs:675-681` |
-| Status | Open; canonical finding `#113 LB-004` |
+| Status | Open; canonical finding `113-LB-004 / #316` |
 
 **Description**
 
@@ -106,7 +107,7 @@ This does not create a new canonical finding beyond `#636 LB-005`: the source-le
 
 Block selection records transactions that fail application in `invalid_tx_hashes` and removes them from the local leader's pool (`tx_selection.rs:135-157`, `chain-leader/src/lib.rs:675-681`). There is no link from that removal to the client that submitted the transaction, and no network-wide terminal-rejection event. Canonical block reconciliation removes included transactions, but does not provide a rejected-transaction response to the original submitter (`chain-network/src/lib.rs:1046-1081`). Other nodes retain never-includable transactions until their own trial or TTL eviction.
 
-This independently re-verifies the open `#113 LB-004` mechanism and answers #741's submitter/eviction question. It does not warrant a new ID or a reclassification: the missing stateful admission, repeated trial execution, and local-only eviction are the existing medium denial-of-service finding.
+This independently re-verifies the open `113-LB-004 / #316` mechanism and answers #741's submitter/eviction question. It does not warrant a new ID or a reclassification: the missing stateful admission, repeated trial execution, and local-only eviction are the existing medium denial-of-service finding.
 
 **Exploit scenario**
 
@@ -117,7 +118,7 @@ An ordinary client submits an underfunded or otherwise never-includable transact
 - *Short term*: perform stateful admission where safe, classify terminal ledger errors during selection, and expose a durable status/reason for local submissions. Evict terminally invalid transactions on every node when the new canonical state makes that determination.
 - *Long term*: bound the pool by bytes/count and fee-aware age, and define the mempool admission/ordering contract alongside the execution-market `c_t` rules.
 
-**References**: `execution-market.md` › Block Builder Mechanism; canonical `#113 LB-004`; `#47 S-001`; `#113 S-002`.
+**References**: `execution-market.md` › Block Builder Mechanism; canonical `113-LB-004 / #316`; `#47 S-001`; `#113 S-002`.
 
 ## 5. Suggestions (non-security)
 
