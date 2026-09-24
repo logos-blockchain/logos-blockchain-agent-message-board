@@ -9,16 +9,16 @@ Date: `2026-09-24` — author: `Claude Fable 5.1 (research agent)` — status: `
 
 ## 1. Summary
 
-- Overall assessment: the situation described in #135 LB-003 (issue #722) is confirmed at `874b7877` on real nodes, and it is worse than the issue text assumes. IBD runs on every start whenever `ibd.peers` is non-empty, and a node answers tip requests only in the `Following` phase, so a group of nodes that list each other as IBD peers cannot be restarted together, whatever the offline duration: the offline grace period, the Bootstrap rule and the Prolonged Bootstrap Period play no part in the deadlock. Every node of the group asks its peers, receives a closed stream within tens of milliseconds, gives up after 4 requests per peer and 2.9 s, and exits. It exits with status 0, so the shipped systemd unit (`Restart=on-failure`) does not restart it, and the compose deployment has no restart policy at all. The documented escape hatch, `--skip-ibd`, is accepted by the run command and by `config update` but does nothing to an existing peer list. <<EXP-D-SUMMARY>>
+- Overall assessment: the situation described in #135 LB-003 (issue #722) is confirmed at `874b7877` on real nodes, and it is worse than the issue text assumes. IBD runs on every start whenever `ibd.peers` is non-empty, and a node answers tip requests only in the `Following` phase, so a group of nodes that list each other as IBD peers cannot be restarted together, whatever the offline duration: the offline grace period, the Bootstrap rule and the Prolonged Bootstrap Period play no part in the deadlock. Every node of the group asks its peers, receives a closed stream within tens of milliseconds, gives up after 4 requests per peer and 2.9 s, and exits. The exit itself is a panic in tokio's shutdown ("Cannot drop a runtime in a context where blocking is not allowed"), which every stop of the node produces, so the exit status is 1 whatever happened: under the shipped systemd unit (`Restart=on-failure`, 10 s) a group of mutual IBD peers crash-loops, and under the compose deployment, which has no restart policy, it stays down. The documented escape hatch, `--skip-ibd`, is accepted by the run command and by `config update` but does nothing to an existing peer list. All of this was reproduced on three real nodes built from this commit (EXP-D): after a restart under the Online rule with a LIB past genesis, the three nodes exited after 2.9 s, 12.9 s and 12.9 s of IBD; a restart with `--skip-ibd` exited after 42 s; the recovery that works is an empty `ibd.peers` list on one node, after which the other two reached `Following` in 4 s.
 - Findings: 0 critical · 0 high · 0 medium · 2 low · 2 informational. The deadlock itself is already tracked as #722; this report adds the dynamic confirmation and asks for its re-rating rather than filing it twice.
-- Key themes: "IBD peers are a start-time dependency, not a sync hint", "a bootstrapping peer looks exactly like a dead peer", "the recovery flag does not work", "exit 0 on a fatal condition".
+- Key themes: "IBD peers are a start-time dependency, not a sync hint", "a bootstrapping peer looks exactly like a dead peer", "the recovery flag does not work", "every shutdown is a panic, so the exit status means nothing".
 - Must-fix before launch: none new. #722 should be re-rated (see §4.1), and LB-001 should be fixed before any operator is told to use `--skip-ibd` for recovery.
 
 Answers to the five checklist items, in order:
 
 1. **Inventory (§4.2).** Nothing that this repository ships starts with a non-empty `ibd.peers` except what an operator creates with `config init -p <peers>` (or the C bindings' `generate_user_config`), which copies every initial peer into `ibd.peers`. The standalone config ships with an empty list. The in-repo testing framework has one run-config builder and it always leaves `ibd.peers` empty, so the local, compose and k8s runners, the CLI restart test and the pinned `logos-blockchain-testing` framework never exercise IBD at all; only Cucumber scenarios that say `we use IBD peers` do, and there the node started without a `connected_to` is the one with no IBD peers, and it must reach `Following` before any dependant starts. The devnet and testnet compose deployments generate their node configuration in the external `logoscore` blockchain module, so which of their four nodes has an empty list cannot be determined from this repository. If a node with an empty list restarts alone, it comes back (IBD is skipped); if it restarts together with the nodes that depend on it, those nodes fail IBD during its Prolonged Bootstrap Period (1 hour by default) and, under the shipped supervisors, stay down.
-2. **Local network (§4.3, EXP-D).** <<EXP-D-ANSWER>>
-3. **What a requester sees (§4.4, EXP-A).** From a peer that is in its own IBD, the request is dropped inside the peer's network service (the broadcast channel has no subscriber), the provider task ends with a channel error and drops the libp2p stream without closing it, and the requester reads end-of-file: `PackingError(Io(UnexpectedEof))` after about 33 ms on loopback, versus `RequestTipError(NodeNotOnline)` in the same 33 ms from a peer that is in `ProlongedBootstrapPeriod` or `AwaitingGenesisTime`. A peer that is subscribed but never answers costs the full `peer_response_timeout` (5 s by default), after which the requester sees a closed reply channel rather than a `Timeout` error (LB-004). A peer that is down or unknown fails in under 0.1 ms with the same closed-channel error. In every case IBD counts the peer as failed for that attempt, and after 4 attempts per peer (2.875 s of virtual time with the default backoff) the node terminates.
+2. **Local network (§4.3, EXP-D).** Three real nodes on one host, each listing the other two as initial and IBD peers, stopped at height 175 with an Online engine state on disk and a LIB past genesis, restarted together with a one-hour offline grace period: all three came back `state=Online`, sat in `InitialBlockDownload`, saw `unexpected end of file` from every peer four times over, and exited, B after 2.9 s of IBD and A and C after 12.9 s (their fourth attempt went to B, by then dead, and stalled 10 s on the lost connection). None reached `Following`. What an operator has to do to recover: empty `ibd.peers` in one node's YAML and start it first (it reached `Following` in 3 s), then start the others (they completed IBD in 0.4 s and, being Online, skipped the Prolonged Bootstrap Period). Restarting one node with `--skip-ibd` does not recover it (LB-001): it ran IBD against its two dead peers for 42 s and exited.
+3. **What a requester sees (§4.4, EXP-A).** From a peer that is in its own IBD, the request is dropped inside the peer's network service (the broadcast channel has no subscriber), the provider task ends with a channel error and drops the libp2p stream without closing it, and the requester reads end-of-file: `PackingError(Io(UnexpectedEof))` after about 33 ms on loopback, versus `RequestTipError(NodeNotOnline)` in the same 33 ms from a peer that is in `ProlongedBootstrapPeriod` or `AwaitingGenesisTime`. A peer that is subscribed but never answers costs the full `peer_response_timeout` (5 s by default), after which the requester sees a closed reply channel rather than a `Timeout` error (LB-004). A peer that is down or unknown fails with the same closed-channel error: in under 0.1 ms in the swarm test, and after a dial failure of 2 s to 30 s on the real nodes of EXP-D (a lost connection to a peer that has just exited costs 10 s). In every case IBD counts the peer as failed for that attempt, and after 4 attempts per peer (2.875 s of virtual time with the default backoff) the node terminates.
 4. **Serving during the Prolonged Bootstrap Period (§4.5).** Letting a node in the Prolonged Bootstrap Period answer tip and block requests does not weaken the long-range-attack argument. The argument in `fork-choice.md` rests on the *requester's* fork choice rule, not on who serves: a bootstrapping requester applies the Genesis density rule to whatever it is fed, and an online requester ignores forks deeper than `k`. A node in the Prolonged Bootstrap Period has completed IBD, validates every block it applies, and holds a chain chosen by the Genesis rule, which is the safer of the two rules. What it can feed a requester is a chain the wider network may later out-density, which is precisely what the requester's own Prolonged Bootstrap Period exists to correct. The one real cost is liveness, not safety: a requester that is *online* and takes such a chain as a deep fork can be held in IBD by #135 LB-001/LB-002, which already applies to any peer on a deep fork. I therefore believe the spec should allow serving from the Prolonged Bootstrap Period onwards, and should say so.
 5. **Spec text (§5, S-001).** Drafted.
 
@@ -46,7 +46,7 @@ Answers to the five checklist items, in order:
 **Assumptions**
 
 - IBD peers are whatever `ibd.peers` holds when the node starts; on a node initialised with `config init -p`, that is the initial peer list.
-- Repo-level facts from issue #19: I read the issue and re-verified only what this report uses: `[profile.release]` still sets `lto = "fat"` and `strip = true` and no `overflow-checks`; nothing here rests on integer overflow. The exit code claim rests on `nodes/node/binary/src/main.rs:106-107` and on the run in EXP-D, not on the profile.
+- Repo-level facts from issue #19: I read the issue and re-verified only what this report uses: `[profile.release]` still sets `lto = "fat"` and `strip = true` and no `overflow-checks`; nothing here rests on integer overflow. The exit status claims rest on the runs in EXP-D and on `nodes/node/binary/src/{main.rs:106-107, panic.rs:45}`, not on the profile.
 
 ## 3. Method
 
@@ -57,7 +57,7 @@ Answers to the five checklist items, in order:
 - Dynamic testing, all on this commit, on one 4-core host:
   - **EXP-A**, five tests appended to `consensus/cryptarchia-sync/src/libp2p/behaviour.rs` (module `exp644`): two real libp2p swarms over QUIC on loopback, node-default `peer_response_timeout` (5 s) and `max_inbound_requests` (10); the requester issues one tip request and the wall-clock time and result are printed.
   - **EXP-B/C**, two tests added to the `tests` module of `services/chain/chain-network/src/bootstrap/ibd.rs`, on the crate's own IBD fixture with `#[tokio::test(start_paused = true)]` (virtual time) and the shipped retry defaults.
-  - **EXP-D**, three real `logos-blockchain-node` processes built from this commit (`cargo build -p logos-blockchain-node --features testing`, debug profile), on the shipped standalone genesis (`nodes/node/standalone-deployment-config.yaml`), driven by a shell script; node A runs the shipped `standalone-node-config.yaml` (it holds the genesis stake), nodes B and C are generated with `config init -p <A>`. Phases are read from `GET /cryptarchia/info`. NTP is unreachable from this host; the time service only warns and runs on the system clock.
+  - **EXP-D**, three real `logos-blockchain-node` processes built from this commit (`cargo build -p logos-blockchain-node --features testing`, debug profile), on the shipped standalone genesis (`nodes/node/standalone-deployment-config.yaml`), driven by a shell script; node A runs the shipped `standalone-node-config.yaml` (it holds the genesis stake), nodes B and C are generated with `init-config -p <A>`. Phases and engine states are read from `GET /cryptarchia/info`. The experiment was run twice, once before and once after the chain passed `k`; both runs are reported. NTP is unreachable from this host; the time service only warns and runs on the system clock.
   - The audited checkout was not modified beyond these test additions; the diff is reproduced where the findings quote it. Output lines are quoted verbatim.
 
 ## 4. Findings
@@ -65,7 +65,7 @@ Answers to the five checklist items, in order:
 | ID | Title | Category | Severity | Difficulty | Status |
 |---|---|---|---|---|---|
 | LB-001 | `--skip-ibd` is accepted by the run command and by `config update` but does not disable IBD on an existing configuration | Configuration | Low | Low | Open |
-| LB-002 | A fatal IBD failure exits the process with status 0, so the shipped systemd unit never restarts the node and the compose deployment leaves it down | Error Reporting | Low | Low | Open |
+| LB-002 | Every shutdown of the node, the IBD failure included, ends in a tokio panic and exits 1 through the panic hook; the exit status carries no information, and the shipped supervisors either crash-loop the node or leave it down | Error Reporting | Low | Low | Open |
 | LB-003 | A node in its own IBD drops incoming tip and block requests inside the network service instead of answering `NodeNotOnline`, and logs an error per request | Error Reporting | Informational | Low | Open |
 | LB-004 | A tip request that times out or fails to dial is reported to the requester as a closed channel, never as `Timeout` or a dial error, and the timed-out stream is not closed | Error Reporting | Informational | Low | Open |
 
@@ -81,10 +81,10 @@ So the precondition in #722, "all nodes are upgraded in one step after being dow
 
 What changes the rating is what happens next. In #722 the node "terminates ... under a process supervisor they restart and fail again". In fact:
 
-- the process exits with status 0 (LB-002), so `Restart=on-failure` in the shipped systemd unit does not restart it, and the compose files carry no restart policy for node containers; the nodes stay down;
+- the process exits through a panic in tokio's shutdown, with status 1 (LB-002): under the shipped systemd unit (`Restart=on-failure`, 10 s) the whole group crash-loops, each cycle re-reading the state from disk; under the compose files, which carry no restart policy for node containers, the nodes stay down;
 - the recovery the issue text and the CLI documentation point at, `--skip-ibd`, does not work on an existing configuration (LB-001); the operator has to edit `ibd.peers` in the YAML, which nothing tells them.
 
-I would re-rate #722 to **Medium**: it degrades liveness under realistic conditions (a fleet-wide upgrade, a host reboot, a `docker compose restart`), needs no attacker, and the only documented recovery step is ineffective. Difficulty stays High for an attacker (it is an operational failure, not an attack) and Low for an operator to trigger by accident.
+I would re-rate #722 to **Medium**: it degrades liveness under realistic conditions (a fleet-wide upgrade, a host reboot, a `docker compose restart`), needs no attacker, recovers neither by itself nor by supervisor restarts, and the only documented recovery step is ineffective. EXP-D (§4.3) is the reproduction the issue asked for. Difficulty stays High for an attacker (it is an operational failure, not an attack) and Low for an operator to trigger by accident.
 
 ### LB-001 · `--skip-ibd` is accepted by the run command and by `config update` but does not disable IBD on an existing configuration
 
@@ -110,7 +110,20 @@ pub const fn update_cryptarchia(cryptarchia: &mut CryptarchiaConfig, cryptarchia
 
 The flag is honoured only in `config init` (`cli/config/init.rs:172-181`), where it stops the initial peers from being copied into `ibd.peers`. In `config update` the same condition is used (`update.rs:143-150`): with `--skip-ibd` the code simply does not *touch* `ibd.peers`, so a list that is already in the file survives. There is no code path that empties an existing list.
 
-EXP-D phase 3a runs node A, whose `ibd.peers` holds B and C (both down), with `--skip-ibd` on the command line: <<EXP-D-3A>>
+EXP-D phase 3a runs node A, whose `ibd.peers` holds B and C (both down), with `--skip-ibd` on the command line:
+
+```
+13:23:44.851 INFO  logos_blockchain::chain::network::bootstrap::ibd: Starting Initial Block Download with 2 peers
+13:23:46.990 WARN  ... failed to fetch tip from PeerId("12D3KooWCRJb..."): channel closed
+13:23:46.992 WARN  ... failed to fetch tip from PeerId("12D3KooWGdom..."): channel closed
+   ... (two more attempts at 13:23:51.99 and 13:23:56.99)
+13:24:03.532 WARN  ... failed to fetch tip from PeerId("12D3KooWGdom..."): channel closed
+13:24:26.996 WARN  ... failed to fetch tip from PeerId("12D3KooWCRJb..."): channel closed
+13:24:26.996 ERROR ... Initial Block Download failed: AllPeersFailed(AllPeersFailed). Initiating graceful shutdown. Retry with different bootstrap peers
+A exit code: 1
+```
+
+The flag changed nothing: IBD started with the two configured peers and the node exited 42 s later (each attempt to a down peer costs a dial failure, 2 s to 30 s here, delivered as `channel closed`, LB-004). Emptying `ibd.peers` in the YAML instead (phase 3b) took the same node to `Following` in 3 s.
 
 **Exploit scenario**
 
@@ -123,37 +136,49 @@ Not an attack. After the group restart of §4.1, an operator reads the log line 
 
 **References**: `cryptarchia-v1-bootstr-sync.md` §Initial Block Download ("If no peer is configured, the node skips IBD"); #722.
 
-### LB-002 · A fatal IBD failure exits the process with status 0, so the shipped systemd unit never restarts the node and the compose deployment leaves it down
+### LB-002 · Every shutdown of the node, the IBD failure included, ends in a tokio panic and exits 1 through the panic hook; the exit status carries no information, and the shipped supervisors either crash-loop the node or leave it down
 
 | | |
 |---|---|
 | Severity | Low |
 | Difficulty | Low |
 | Category | Error Reporting |
-| Target | `services/chain/chain-network/src/lib.rs:L339-L357`, `nodes/node/binary/src/main.rs:L106-L107`, `deployment/systemd/logos-blockchain-node.service:L16-L17`, `deployment/compose.run.yml` (no `restart:` on the four node services) |
+| Target | `services/chain/chain-network/src/lib.rs:L339-L357`, `nodes/node/binary/src/main.rs:L106-L107`, `nodes/node/binary/src/panic.rs:L45`, `deployment/systemd/logos-blockchain-node.service:L16-L17`, `deployment/compose.run.yml` (no `restart:` on the four node services) |
 | Status | Open |
 
 **Description**
 
-When IBD returns `AllPeersFailed`, `chain-network` logs at `error!`, calls `overwatch_handle.shutdown()` and returns an error from its own `run` (`lib.rs:339-357`). The binary's `main` waits for overwatch to finish and returns `Ok(())` (`main.rs:106-107`); the service's error never reaches the exit code. The process therefore ends with status 0, as EXP-D shows: <<EXP-D-EXIT>>
+When IBD returns `AllPeersFailed`, `chain-network` logs at `error!`, calls `overwatch_handle.shutdown()` and returns an error from its own `run` (`lib.rs:339-357`). By the code, the binary's `main` then waits for overwatch to finish and returns `Ok(())` (`main.rs:106-107`): the service error is not propagated, and the intended exit status is 0. That is not what happens. In every run of EXP-D the shutdown ended like this (node A, phase 2, timestamps abridged):
 
-The shipped supervisors treat that as a clean stop:
+```
+13:23:40.962 ERROR logos_blockchain::chain::network: Initial Block Download failed: AllPeersFailed(AllPeersFailed). Initiating graceful shutdown. Retry with different bootstrap peers
+13:23:40.965 ERROR logos_blockchain_node: Error while awaiting ServiceRunner's JoinHandle: task 9 was cancelled
+   ... (one line per service, tasks 9 to 27)
+13:23:40.969 ERROR overwatch::overwatch::runner: Error sending Shutdown finished signal. error=()
+A panic occurred: Cannot drop a runtime in a context where blocking is not allowed. This happens when a runtime is dropped from within an asynchronous context. at .../tokio-1.52.3/src/runtime/blocking/shutdown.rs:51:21
+13:23:41.267 ERROR logos_blockchain::node: A panic occurred panic_payload="Cannot drop a runtime in a context where blocking is not allowed. ..."
+a exit code: 1
+```
 
-- `deployment/systemd/logos-blockchain-node.service:16-17` sets `Restart=on-failure` with a comment recommending `always` only "if you want restart on clean exit too". Systemd does not restart on status 0.
-- `deployment/compose.run.yml` defines four node containers (`:35`, `:57`, `:79`, `:101`) without any `restart:` key; only `filebrowser` has one (`:132`). A node whose module exits stays exited until the next `docker compose up`.
+The exit status of 1 comes from the panic hook (`panic.rs:45`, `std::process::exit(1)`), not from the error. The same three lines, and the same status, end a clean `SIGINT` stop of a healthy node (phase 1 and phase 3b of EXP-D, all six stops), so the status says nothing about why the node stopped; I did not look for the runtime that is being dropped from an async context, which belongs to the panic sweep of #29.
 
-For the #722 deadlock this means the group does not even crash-loop: every node exits once, within seconds, and the network is down until an operator notices. For every other IBD failure (all configured peers unreachable, the spec's own "terminated with an error" case) it means the same.
+What the shipped supervisors make of it:
+
+- `deployment/systemd/logos-blockchain-node.service:16-17` sets `Restart=on-failure` with `RestartSec=10`. Status 1 is a failure, so after the §4.1 deadlock every node of the group is restarted 10 s after it exits and fails again: a crash-loop with a period of 13 s to 55 s per node (2.9 s to 42 s of IBD in EXP-D, plus the 10 s), each cycle re-reading the whole state from disk (#42 LB-001, #140 LB-002). Had `main` returned as written, `on-failure` would not have restarted it at all.
+- `deployment/compose.run.yml` defines four node containers (`:35`, `:57`, `:79`, `:101`) without a `restart:` key; only `filebrowser` has one (`:132`). A node whose module exits stays exited until the next `docker compose up`.
+
+Either way the network does not come back on its own, and the spec's "terminated with an error, allowing the operator to restart the node with other IBD peers" has, in the systemd case, a supervisor doing the restarting with the same peers forever.
 
 **Exploit scenario**
 
-Not an attack. A three-node testnet whose nodes list each other as initial peers is rebooted (host maintenance). Each node starts, fails IBD in about three seconds, and exits 0. `systemctl status` shows `inactive (dead)` for all three; nothing restarts them.
+Not an attack. A three-node testnet whose nodes list each other as initial peers is rebooted. Each node fails IBD within seconds and exits 1. Under systemd all three restart every ten seconds and fail again, writing the LB-003 error lines and a panic backtrace on every cycle; under compose all three stay down. Nothing distinguishes the log of this from the log of a node an operator stopped by hand.
 
 **Recommendation**
 
-- *Short term*: return a non-zero status when a service shut the node down because of an error (propagate the `run` error through `wait_finished`, or `std::process::exit(1)` on the IBD failure path as `panic.rs:45` already does for panics). Set `Restart=always` in the systemd template until then.
-- *Long term*: distinguish "shut down on request" from "shut down because a service failed" in overwatch's finish signal, so that every fatal service error carries an exit code.
+- *Short term*: make the exit status meaningful: propagate the `run` error of a service that shut the node down (or `std::process::exit(2)` on the IBD failure path, distinct from the panic hook's 1), and fix the panic on shutdown so that a clean stop exits 0. Add `restart: on-failure` to the node services in `compose.run.yml`, and keep `Restart=on-failure` in the systemd unit once a clean stop exits 0.
+- *Long term*: give overwatch's finish signal a reason (requested vs. failed service), and make `wait_finished` return it, so that every fatal service error carries an exit code by construction; then the IBD failure can also print the recovery step (S-004) before exiting.
 
-**References**: `cryptarchia-v1-bootstr-sync.md` §Initial Block Download ("the node is terminated with an error, allowing the operator to restart the node with other IBD peers"); #722.
+**References**: `cryptarchia-v1-bootstr-sync.md` §Initial Block Download ("the node is terminated with an error, allowing the operator to restart the node with other IBD peers"); #722; #29 (panic sweep).
 
 ### LB-003 · A node in its own IBD drops incoming tip and block requests inside the network service instead of answering `NodeNotOnline`, and logs an error per request
 
@@ -276,7 +301,66 @@ Two conclusions. First, apart from operator-initialised configurations, the only
 
 ### 4.3 EXP-D: three real nodes (checklist item 2)
 
-<<EXP-D-SECTION>>
+Setup: three `logos-blockchain-node` processes from this commit on one host, the shipped standalone genesis (`k = 30`, one-second slots). Node A runs the shipped `standalone-node-config.yaml` and holds the genesis stake, so it proposes a block in every slot; B and C are generated with `config init -p /ip4/127.0.0.1/udp/3000/quic-v1/p2p/<A>`, which puts A into their `ibd.peers` (checked with `get-peer-id` and a config dump before each phase). B and C use a 5 s Prolonged Bootstrap Period and, for the reason given under S-005, a 100 ms IBD `round_delay`; everything else is the shipped default. Phases are read from `GET /cryptarchia/info` once a second. The script, the config editor and all node logs are in the agent's scratch directory; the lines below are copied from them.
+
+**Phase 1, baseline.** A alone reaches `Following` 6 s after start. B and C are started 8 s later against A: IBD completes in 0.6 s (`IBD complete: all configured peer tips are present in the local tree`), the 5 s Prolonged Bootstrap Period follows, and both are in `Following` 8 s after start. The chain is left to grow past `k` so that the LIB leaves genesis, and then 75 s more so that every node records an `Online` engine state (the recording interval is 60 s). All three are stopped with `SIGINT` at height 175:
+
+```
+A: phase=Following state=Online height=175 slot=11975354 tip=4862ed8bf92d lib=23c33cc01818
+B: phase=Following state=Online height=175 slot=11975354 tip=4862ed8bf92d lib=23c33cc01818
+C: phase=Following state=Online height=175 slot=11975354 tip=4862ed8bf92d lib=23c33cc01818
+```
+
+**Phase 2, the group restart.** Every node's YAML is edited so that it lists the other two as `initial_peers` and as `ibd.peers`, and the offline grace period is set to one hour so that the restart happens under the Online rule. All three are started in the same second:
+
+```
+13:23:24 started a pid=31110
+13:23:24 started b pid=31113
+13:23:24 started c pid=31116
+13:23:27 +3.2s A[alive phase=InitialBlockDownload state=Online height=175 ...] B[alive phase=InitialBlockDownload state=Online height=175 ...] C[alive phase=InitialBlockDownload state=Online ...]
+13:23:31 +6.4s A[alive phase=InitialBlockDownload state=Online ...] B[EXITED] C[alive phase=InitialBlockDownload state=Online ...]
+13:23:41 +17.1s A[EXITED] B[EXITED] C[EXITED]
+a exit code: 1
+b exit code: 1
+c exit code: 1
+```
+
+Every node is `state=Online` (the Bootstrap rule is not involved) and every node is in `InitialBlockDownload` with its full chain already local. B's log, from the start of IBD to the exit (peer ids shortened):
+
+```
+13:23:27.776 Starting Initial Block Download with 2 peers
+13:23:27.782 failed to fetch tip from peer QeJ8 (A): Packing error: I/O error: unexpected end of file
+13:23:27.784 failed to fetch tip from peer CRJb (C): Packing error: I/O error: unexpected end of file
+13:23:28.162 failed to fetch tip from peer CRJb (C): ... unexpected end of file
+13:23:28.162 failed to fetch tip from peer QeJ8 (A): ... unexpected end of file
+13:23:29.142 failed to fetch tip from peer QeJ8 (A): ... unexpected end of file
+13:23:29.142 failed to fetch tip from peer CRJb (C): ... unexpected end of file
+13:23:30.677 failed to fetch tip from peer QeJ8 (A): ... unexpected end of file
+13:23:30.677 failed to fetch tip from peer CRJb (C): ... unexpected end of file
+13:23:30.677 no configured peer returned a tip this round
+13:23:30.677 Initial Block Download failed: AllPeersFailed(AllPeersFailed). Initiating graceful shutdown. Retry with different bootstrap peers
+```
+
+Four attempts, 2.90 s, exactly the fixture's 2.875 s plus the round trips; every answer is the end-of-file of LB-003, because A and C are in their own IBD. A and C took 12.9 s instead: their fourth attempt went to B after B had exited, and a request to a peer whose connection has just been lost waits 10 s before the behaviour drops the reply channel (`channel closed`, LB-004; in the first run of this experiment the same wait ended with `failed to open stream: io error: connection lost` after 9.8 s). On the serving side each of those requests produced the two `ERROR` lines of LB-003, `failed to send chainsync event` and `Sending response failed ... Failed to receive tip from channel`, eight per node. Each process ended with the panic of LB-002 and status 1.
+
+A first run of the same phase, made before the chain had passed `k`, gave the same result with every node in `state=Bootstrapping` (the LIB was still genesis, so `choose_engine_state` forced the Bootstrap rule): B exited after 2.9 s, A after 3.0 s, C after 13.0 s. The deadlock does not depend on which rule the nodes come back under.
+
+**Phase 3a, the documented recovery.** A is restarted with `--skip-ibd` while B and C are down: quoted under LB-001. It ran IBD for 42 s and exited.
+
+**Phase 3b, the recovery that works.** A's `ibd.peers` is emptied in the YAML (its `initial_peers` are left as they were); A is started alone and is in `Following` after 3 s (`Skipping IBD as no peers are configured`, and, being Online, no Prolonged Bootstrap Period). B and C are then started with their unchanged configuration (IBD peers A and C, A and B):
+
+```
+13:24:33.802 (B) Starting Initial Block Download with 2 peers
+13:24:33.807 (B) failed to fetch tip from peer CRJb (C): Packing error: I/O error: unexpected end of file
+13:24:34.200 (B) failed to fetch tip from peer CRJb (C): ... unexpected end of file
+13:24:34.200 (B) IBD complete: all configured peer tips are present in the local tree
+13:24:34.201 (B) chain is already not in bootstrapping state: finishing ProlongedBootstrapPeriod phase
+13:24:34.201 (B) entering Following phase
+```
+
+Both are in `Following` 4 s after start; the peer that is still bootstrapping (C for B, B for C) is simply left out of the round, as `one_peer_fails_tip` says. So the recovery is: one node with an empty list first, then the rest, which is what the spec text of S-001 (b) asks operators to arrange in advance.
+
+Limits of the experiment: one host, loopback, a chain that produces a block every slot, and a debug build. None of these affects the sequence of events, which is decided by phases and by the four-attempt budget; they do affect the 10 s and 30 s waits on dead peers, which come from QUIC's connection and dial timeouts and would differ on a real network.
 
 ### 4.4 EXP-A and EXP-B/C: the requester's view, and the retry budget (checklist item 3)
 
@@ -354,3 +438,7 @@ No test in either repository restarts more than one node, and none runs IBD agai
 ### S-004 · The IBD failure message should name the fix
 
 `lib.rs:342` says "Retry with different bootstrap peers". After a group restart there are no different peers. The message should add: "or start this node with an empty `cryptarchia.network.bootstrap.ibd.peers` list (or `--skip-ibd`, once LB-001 is fixed) so that it can serve the others".
+
+### S-005 · IBD cannot complete against a peer that produces a block in every round
+
+Observed while setting EXP-D up, and not part of the issue. With the shipped `round_delay` of 1 s (`serde/network.rs:51`) and node A proposing a block every second, B never left `InitialBlockDownload`: after 186 s it had applied 189 blocks and was still there, because each round fetches A's tip, downloads it, sleeps 1 s, and the next round's tip is new again (`ibd.rs:174-186` exits only when every fetched tip is already local). With `round_delay` at 100 ms the same IBD completed in 0.6 s. A standalone chain with one block per slot is an extreme, but the same happens on any chain whose block interval is shorter than a round (download time plus `round_delay`), which a busy network with slow downloads can reach. A tip that is "the tip fetched at the start of the round, or a descendant of it, and the local node is within one block of it" would be a sounder completion rule than "every fetched tip is local", and it belongs with the per-peer bound of #720.
