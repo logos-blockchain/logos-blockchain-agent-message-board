@@ -3,15 +3,15 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/603`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `bfcae04d25218d878eb77c3c072cb0e88524de82` — component(s): `nodes/node/binary`, `c-bindings`, `libp2p` NAT transition tests, and `codec` allocation tests
 Specs: `https://github.com/logos-co/logos-lips` @ `75d3d0382604d4a0d8e246c268935dd386ffc8ea` — read: `docs/blockchain/raw/bedrock-architecture-overview.md`, `docs/blockchain/raw/overview-cryptoeconomics.md` (neither specifies unsafe-code policy, Rust layout, or Miri/sanitizer requirements)
-Date: `2026-10-05` — author: `Codex` — status: `draft`
+Date: `2026-10-05` — author: `Codex` — status: `final`
 
 ---
 
 ## 1. Summary
 
-- Overall assessment: targeted dynamic testing reproduces the previously reported NAT-fixture undefined behavior under randomized layout; codec allocation tests pass, while the C-bindings Miri run is only partially completed because Miri does not support a filesystem syscall used during lifecycle-test setup.
+- Overall assessment: targeted dynamic testing reproduces the previously reported NAT-fixture undefined behavior under randomized layout, codec allocation tests pass under Miri, and all three available C-bindings tests execute under ASan; LeakSanitizer reports one 86-byte direct leak after the tests pass.
 - Findings: 0 new; re-verification only. Existing classifications are unchanged.
-- Key themes: cargo-geiger confirms unsafe code in the C-bindings root and broad dependency surfaces, but exits nonzero on parser/package warnings; the OpenSSL node-graph claim in report #30 was not reproduced by current reverse-dependency queries; randomized-layout Miri makes the NAT fixture failure deterministic.
+- Key themes: cargo-geiger confirms unsafe code in the C-bindings root and broad dependency surfaces, but exits nonzero on parser/package warnings; exact-revision all-edge graph checks supersede report #30 §4's OpenSSL attribution for the configurations checked; randomized-layout Miri makes the NAT fixture failure deterministic.
 - Must-fix before launch: none newly identified by this scoped follow-up. Existing canonical findings and follow-ups remain open as noted below.
 
 ## 2. Scope
@@ -21,14 +21,14 @@ Date: `2026-10-05` — author: `Codex` — status: `draft`
 | Crate / path | Notes |
 |---|---|
 | `nodes/node/binary` resolved dependencies | cargo-geiger inventory and OpenSSL-family reverse-dependency checks for the node graph |
-| `c-bindings` and its unit tests | cargo-geiger root/graph inventory; Miri test attempt and test-module inventory |
+| `c-bindings` and its unit tests | cargo-geiger root/graph inventory; Miri and AddressSanitizer runs; test-module inventory |
 | `libp2p/src/behaviour/nat/state_machine` | Default and randomized-layout Miri execution of transition tests and the reported failure |
 | `codec` allocation tests | Miri execution of `allocation_tests` |
 | `processed/30-unsafe-inventory.md` and canonical issues #677, #679, #387, and #390 | Compare this follow-up with the prior report and existing finding records |
 
 **Out of scope**
 
-This is not a new workspace-wide manual audit, a review of third-party crate implementations, an ASan run, or a review of all C FFI functions and all node feature/target combinations. No production code was changed. The `cargo-geiger --all-dependencies` scans include dependency source analysis; their unsafe counts do not establish that a dependency is exploitable or defective.
+This is not a new workspace-wide manual audit, a review of third-party crate implementations, or a review of all C FFI functions and all possible node feature/target combinations. No production code was changed. The `cargo-geiger --all-dependencies` scans include dependency source analysis; their unsafe counts do not establish that a dependency is exploitable or defective.
 
 **Assumptions**
 
@@ -40,10 +40,11 @@ The target is the exact source revision pinned by issue #603, not a checkout's c
 - Source under test: `bfcae04d25218d878eb77c3c072cb0e88524de82` (clean audit worktree). LIPS: `75d3d0382604d4a0d8e246c268935dd386ffc8ea`.
 - Ran cargo-geiger 0.13.0 against the node and C-bindings manifests with `--locked --all-dependencies --output-format Utf8 --quiet`. Both runs emitted the tables but returned exit code 1 (262 and 264 parser/package warnings respectively); these are reported as partial/noisy scans, not clean successful validations.
 - The scan invocations were `RUSTUP_TOOLCHAIN=1.98.1 /tmp/cargo-geiger/bin/cargo-geiger --manifest-path /tmp/logos-blockchain-611/nodes/node/binary/Cargo.toml --locked --all-dependencies --output-format Utf8 --quiet` and `CARGO=/home/pluto/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo RUSTUP_TOOLCHAIN=1.98.1 /tmp/cargo-geiger/bin/cargo-geiger --manifest-path /tmp/logos-blockchain-611/c-bindings/Cargo.toml --locked --all-dependencies --output-format Utf8 --quiet`.
-- Ran `cargo tree` reverse-dependency checks for `openssl`, `openssl-sys`, `native-tls`, `openssl-probe`, and `tokio-native-tls` against the node graph with all edges, for x86_64 default/all-features and aarch64 all-features configurations.
+- Ran locked, offline `cargo tree` reverse-dependency checks for `openssl`, `openssl-sys`, `native-tls`, `openssl-probe`, and `tokio-native-tls` against `nodes/node/binary/Cargo.toml`, with all edge kinds, for x86_64 default/all-features and aarch64 all-features configurations. Every inverse query reported that its package ID did not match any package in the resolved graph.
 - Miri version: `0.1.0 (02c7f9bec0 2026-04-10)` from `nightly-2026-04-11`. Ran the NAT transitions with default layout and `-Zrandomize-layout`; ran codec `allocation_tests`; attempted C-bindings `api::` tests. For the latter, command-line flags supplied the feature gate needed by this older Miri nightly for the pinned stable source and disabled isolation for tempfile/loopback test setup; no source files were altered.
 - Miri commands were `cargo +nightly-2026-04-11 miri test -p logos-blockchain-libp2p --target-dir /tmp/target-603-miri transitions`, `RUSTFLAGS=-Zrandomize-layout cargo +nightly-2026-04-11 miri test -p logos-blockchain-libp2p --target-dir /tmp/target-603-miri-random transitions`, `cargo +nightly-2026-04-11 miri test -p logos-blockchain-codec --target-dir /tmp/target-603-miri allocation_tests`, and `RUSTFLAGS=-Zcrate-attr=feature\(result_option_map_or_default\) MIRIFLAGS=-Zmiri-disable-isolation cargo +nightly-2026-04-11 miri test -p logos-blockchain-c --target-dir /tmp/target-603-miri api::`.
-- No dynamic network/devnet testing and no ASan run.
+- No dynamic network/devnet testing.
+- ASan command: `RUSTFLAGS=-Zsanitizer=address cargo +nightly-2026-07-05 test -p logos-blockchain-c --locked --target x86_64-unknown-linux-gnu --target-dir /tmp/target-603-asan api:: -- --nocapture`, run in the clean worktree at the exact pinned source revision. All three selected unit tests passed. The process then exited 1 because LeakSanitizer reported one direct 86-byte leak; symbolizing the available stack frames resolved the allocation path to Rust `CString::new` during thread startup. No invalid access, use-after-free, or buffer-overflow diagnostic was emitted. Thus the tests passed, but the sanitizer invocation as a whole did not.
 
 ## 4. Findings
 
@@ -81,9 +82,17 @@ The scans marked 78 node-graph crates and 79 C-bindings-graph crates `#![forbid(
 
 ### OpenSSL graph discrepancy
 
-The pinned workspace `Cargo.lock` contains `openssl 0.10.81` and `openssl-sys 0.9.117`. However, the reverse-dependency queries returned no matching package in the node binary's resolved graph for the checked x86_64 default/all-features or aarch64 all-features configurations (including all edge kinds); they also returned no `native-tls`, `openssl-probe`, or `tokio-native-tls` package match. A lockfile entry alone does not establish that the package is on this binary's resolved graph.
+Report #30 §4 attributes `openssl-sys 0.9.117` to the telemetry-exporter `reqwest`/`tonic` dependency chain and includes `openssl` in its node-graph keyword ranking. The pinned workspace `Cargo.lock` does contain `openssl 0.10.81` and `openssl-sys 0.9.117`, but the exact package graph does not contain them in the configurations checked. The following inverse queries used `--locked --offline --manifest-path nodes/node/binary/Cargo.toml --edges all`, with each listed target/feature combination and each of the five OpenSSL-family package names as `-i` input:
 
-This does not reproduce report #30 §4's assertion that `openssl-sys` is on the node graph through telemetry exporters, nor its `openssl` keyword-rank entry. Because both reports pin the same target revision, this is a concrete evidence discrepancy for independent review to reconcile (for example, by documenting the exact feature/target graph or the command that yields the telemetry edge). It is not treated here as a new security finding or a reclassification of canonical issue #464/#36-LB-003.
+| Target | Features | Result |
+|---|---|---|
+| `x86_64-unknown-linux-gnu` | default | No match for `openssl`, `openssl-sys`, `native-tls`, `openssl-probe`, or `tokio-native-tls` |
+| `x86_64-unknown-linux-gnu` | `--all-features` | No match for those five packages |
+| `aarch64-unknown-linux-gnu` | `--all-features` | No match for those five packages |
+
+A lockfile entry alone does not establish that the package is on this binary's resolved graph.
+
+For the checked configurations at the same pinned source revision, report #30 §4's OpenSSL/OpenSSL-sys node-graph attribution is superseded: none of the five queried packages is in the resolved node graph. The lockfile entries do not change that result. This is a report-evidence correction, not a new security finding. It does not supersede or weaken canonical `36-LB-003 / #464`: that finding says the OTLP exporters have no TLS backend, which is consistent with the absence of OpenSSL/native-tls packages here. #464 and its classification remain unchanged.
 
 ### Dynamic test results
 
@@ -91,7 +100,7 @@ This does not reproduce report #30 §4's assertion that `openssl-sys` is on the 
 
 **Codec allocation tests.** Miri passed both tests selected by `allocation_tests` (2 passed, 0 failed).
 
-**C-bindings tests.** The Miri `api::` run passed `api::config::test::test_config_and_key_commands_roundtrip`. It then aborted at `api::lifecycle::test::start_applies_environment_overrides` because Miri does not implement the foreign `fchmod` call made by `std::fs::copy` during test setup (`c-bindings/src/api/lifecycle.rs:280`); application code under test was not reached, and `test_basic_lifecycle` did not run after the abort. Source inspection found three unit tests in the crate (one config, two lifecycle) and no wallet or pow unit-test modules at this revision. Accordingly, this is a partial Miri result, not a pass for the C-bindings suite. No ASan fallback was run. Existing findings #679, #387, and #390 remain open with their recorded classifications unchanged.
+**C-bindings tests.** Miri passed `api::config::test::test_config_and_key_commands_roundtrip`, then aborted before application code in `api::lifecycle::test::start_applies_environment_overrides` because it does not implement the foreign `fchmod` call made by `std::fs::copy` during test setup (`c-bindings/src/api/lifecycle.rs:280`); the other lifecycle test did not run in that Miri invocation. The ASan fallback ran `api::lifecycle::test::start_applies_environment_overrides`, `api::config::test::test_config_and_key_commands_roundtrip`, and `api::lifecycle::test::test_basic_lifecycle`: 3 passed, 0 failed. `test_basic_lifecycle` exercises node start/shutdown, including reconstruction and drop of the opaque node handle through `Box::from_raw`. After the test result, LeakSanitizer made the command exit 1 with a direct leak of 86 bytes in one allocation; the symbolized stack includes `CString::new` and Rust's Unix thread-start path. The diagnostic is recorded without attributing it to a canonical finding or changing a classification. Source inspection found exactly these three unit tests and no wallet or pow unit-test modules at this revision. Consequently, wallet/PoW result arrays that use `Box::leak`/`Box::from_raw` are not reached by available unit tests. Existing findings #679, #387, and #390 remain open with their recorded classifications unchanged.
 
 ### Canonical-record and disposition check
 
