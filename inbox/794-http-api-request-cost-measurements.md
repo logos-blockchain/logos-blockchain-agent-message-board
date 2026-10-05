@@ -3,20 +3,20 @@
 Issue: `https://github.com/logos-blockchain/logos-blockchain-agent-message-board/issues/794`
 Target: `https://github.com/logos-blockchain/logos-blockchain` @ `ed1606e3604255b924ef6da0d4bd90305208a813` — component(s): `nodes/node/binary/src/api`, `nodes/api-common/src`, `services/api/src/http`, `services/wallet/src`, `services/chain/chain-service/src`, `services/chain/chain-leader/src`
 Specs: `https://github.com/logos-co/logos-lips` @ `7244d3b05ddec91a4a7b565bd5a9340ab77ededd` — read: `bedrock-architecture-overview.md`, `overview-cryptoeconomics.md` (both in full). Neither document specifies the HTTP API.
-Date: `2026-10-03` — author: `codex` — status: `final`
+Date: `2026-10-05` — author: `codex` — status: `draft`
 
-This is a current-revision follow-up to report #756 (`inbox/756-http-request-derived-limits-sweep.md`, PR #793). It re-checks the four request-sized paths selected by #794 against the requested current target revision. It does not claim to have completed #794's live-node measurement matrix.
+This is a current-revision follow-up to report #756 (`inbox/756-http-request-derived-limits-sweep.md`, PR #793). It re-checks the four request-sized paths selected by #794 against the requested current target revision. This correction pass obtained one live-node LB-001 baseline at three request sizes, but did not complete #794's measurement matrix or scratch-fix comparisons; the report remains a draft.
 
 ---
 
 ## 1. Summary
 
-- Overall assessment: the four existing API findings remain present at `ed1606e`; the requested timings, RSS/storage-queue measurements, empirical concurrency/stream measurements, and scratch-fix comparisons were not obtained in this environment.
+- Overall assessment: the four existing API findings remain present at `ed1606e`; a live-node LB-001 latency/RSS baseline was measured at three range sizes, while storage queue delay and the remaining matrix are outstanding.
 - Findings: 0 new critical · 0 new high · 0 new medium · 0 new low · 0 new informational
 - Key themes: request-sized immutable block ranges remain uncapped; ascending mutable range chunks still walk and buffer from the tip before truncating; the configured request limit is still applied per route and not to response-body lifetime; wallet backfill still trusts a caller-provided tip as an ancestor candidate.
 - Must-fix before launch: unchanged from #756: LB-001, LB-003, and LB-004; LB-002 needs the cursor-bounded mutable walk before bootstrap can accumulate a large depth.
 
-The prior report's analytical estimates are not relabelled as measurements. The only new execution on this target was a successful release build of `logos-blockchain-node`. No route was exercised and no request latency, RSS, storage queue delay, open-stream count, or fix-versus-baseline result is claimed. The report therefore leaves #794's defining measurement work open.
+The prior report's analytical estimates are not relabelled as measurements. A standalone node at the exact target revision served three legacy full-range requests; measured latency and sampled peak RSS are recorded below. No storage-task queue metric was instrumented, no block write occurred during those requests, and there is no scratch-fix comparison. LB-002, LB-003, and LB-004 remain unmeasured, so #794's defining measurement work is incomplete.
 
 ## 2. Scope
 
@@ -32,7 +32,7 @@ The prior report's analytical estimates are not relabelled as measurements. The 
 
 **Out of scope**
 
-No running standalone node or local network, no storage-backed workload of known chain lengths, and no fix was applied in a scratch branch. No HTTP specification applies. The prior report's assumptions about `axum`, `tower`, storage, the chain service and wallet service are not independently benchmarked here.
+No long-lived mutable bootstrap chain, route-concurrency/open-stream workload, old-tip wallet backfill workload, or scratch-fix comparison was completed. No HTTP specification applies. The prior report's assumptions about `axum`, `tower`, storage, the chain service and wallet service are not independently benchmarked here.
 
 **Assumptions**
 
@@ -44,8 +44,9 @@ The issue's source pin `c4c86be1…` is the baseline report revision, not the ta
 - Confirmed repository identity from the target root `Cargo.toml` and inspected the relevant paths at the exact target revision in the detached worktree. The shared audit checkout itself was not advanced or edited.
 - Re-read the two core LIPS overviews in full at the exact recorded LIPS revision; neither covers HTTP API behavior.
 - Built the target successfully: `rtk cargo build --release -p logos-blockchain-node --target-dir /tmp/target-794` (539 crates compiled).
-- Dynamic testing: none. A live-node run would require the host-like networking path; a previous host-side node-start approval in this Research session was canceled, so I did not retry or substitute a sandboxed node run. A successful compile is not evidence of runtime performance.
-- Re-checked code structure only. The exact loop-count examples below are arithmetic from the current loop shape, not measured values.
+- Dynamic LB-001 baseline, host-like execution through `.agents/cucumber_scripts/e2e-integration-test.sh test_cryptarchia_blocks_streaming experiment_legacy_full_range_costs -- --exact --nocapture`: one standalone local node on Linux x86_64 (32 logical CPUs), `slot_duration=1s`, active-slot coefficient `1/2`, security parameter 7; chain reached tip height 210 and LIB height 203. For each request, `/proc` RSS was sampled every 2ms and a concurrent `consensus_info` poll was timed. Request timings and observed peaks below are measurements from this run, not estimates.
+- The harness was temporary and confined to the detached scratch worktree `/tmp/logos-blockchain-794`; no production implementation was changed. The earlier existing `test_cryptarchia_blocks_streaming` host run exercised its scenarios but failed an existing stream-order assertion (6 actual IDs versus 5 expected in the `slot_to above tip should clamp to tip` case); that failure is not used as a performance result.
+- For LB-002 through LB-004, re-checked code structure only. The exact loop-count examples below are arithmetic from the current loop shape, not measured values.
 
 ## 4. Findings
 
@@ -53,7 +54,7 @@ No new security finding is filed. The existing canonical findings retain their c
 
 | ID | Prior canonical classification | Current-code anchor at `ed1606e` | Dynamic status |
 |---|---|---|---|
-| LB-001 | Denial of Service · Medium · Low | `nodes/node/binary/src/api/queries.rs:16-21`; `nodes/node/binary/src/api/handlers.rs:1491-1518`; `services/api/src/http/mantle.rs:600-681` | No chain-size timings, storage queue delay, or RSS measured |
+| LB-001 | Denial of Service · Medium · Low | `nodes/node/binary/src/api/queries.rs:16-21`; `nodes/node/binary/src/api/handlers.rs:1491-1518`; `services/api/src/http/mantle.rs:600-681` | Three request latency/RSS baselines measured; no storage queue metric, and no scratch-fix comparison |
 | LB-002 | Denial of Service · Medium · Low | `services/api/src/http/mantle.rs:355-457` | No running bootstrap chain or storage-call metric run |
 | LB-003 | Denial of Service / Configuration · Medium · Low | `nodes/node/binary/src/api/backend.rs:218-239`; `nodes/node/binary/src/api/responses/ndjson.rs:10-20`; stream handlers at `handlers.rs:590-606, 1646-1698` | No empirical route concurrency or sustained-stream test run |
 | LB-004 | Denial of Service · Medium · Low | `services/wallet/src/lib.rs:1438-1459, 1639-1704`; `services/chain/chain-service/src/api.rs` (`get_headers`) | No old-tip backfill timing or leadership-slot miss measured |
@@ -62,7 +63,17 @@ These are unchanged supporting code anchors, not independent end-to-end re-verif
 
 ### LB-001 · Legacy immutable range remains sized by the requested slot span
 
-The legacy `BlockRangeQuery` still contains only `slot_from` and `slot_to`, with no bounded-vector or maximum-span validator. `get_immutable_blocks` derives `blocks_limit` directly from the inclusive span (`slot_range_limit`), asks storage for indexed block IDs, then loads block bodies into a `Vec` before returning the response. For a chain with `N` blocks in the requested range, the structural work remains one range scan and up to `N` sequential block-body loads, and the response buffers those blocks. The issue's requested measurements at two or three chain lengths—latency, storage-task delay and peak RSS—were not run.
+The legacy `BlockRangeQuery` still contains only `slot_from` and `slot_to`, with no bounded-vector or maximum-span validator. `get_immutable_blocks` derives `blocks_limit` directly from the inclusive span (`slot_range_limit`), asks storage for indexed block IDs, then loads block bodies into a `Vec` before returning the response. For a chain with `N` blocks in the requested range, the structural work remains one range scan and up to `N` sequential block-body loads, and the response buffers those blocks.
+
+Measured baseline on the standalone node described in §3 (inclusive slot ranges; sampled peak process RSS):
+
+| Requested `N` | Slots | Blocks returned | Request time | Sampled peak RSS | Concurrent `consensus_info` max | Observed height changes |
+|---:|---|---:|---:|---:|---:|---|
+| 50 | 1–95 | 50 | 24,716 µs | 181,036 KiB | 693 µs | none; height stayed 210 |
+| 100 | 1–204 | 100 | 30,586 µs | 181,036 KiB | 830 µs | none; height stayed 210 |
+| 200 | 1–456 | 200 | 38,891 µs | 181,036 KiB | 6,113 µs | none; height stayed 210 |
+
+The three ranges used different slot spans to retrieve the stated numbers of existing blocks from one fixed chain height, not from three chain lengths as requested. This short run did not exercise a block write, and no storage-task queue-delay instrumentation was present; the consensus poll is only an observable concurrent API-impact sample, not a storage queue metric. There is no post-fix measurement. These baseline results neither confirm nor contradict the storage-queue impact claim.
 
 Preserved classification: Denial of Service, Medium severity, Low difficulty, Open. Reuse #756 LB-001; no new identifier or rating change.
 
@@ -94,7 +105,7 @@ Preserved classification: Denial of Service, Medium severity, Low difficulty, Op
 
 ### S-001 · Complete the live-node measurements and compare the scratch fixes
 
-This report does not complete the measurements requested by #794. The next step is to run the issue's test matrix on a host-like local standalone node/network: immutable ranges at multiple chain lengths; mutable ascending ranges at `D` in the thousands with batch sizes 1 and 1,000; empirical per-route concurrency and open-stream cost; and wallet backfill from an old immutable tip while observing the leadership loop. Then apply the short-term recommendations in an isolated scratch branch and repeat the measurements. Record hardware, database/chain size, configuration, request parameters, storage queue delay, RSS, latency, block interval, and the exact code revision. Keep #794 open until those measurements exist.
+This report does not complete the measurements requested by #794. Outstanding work is: repeat the legacy full-range measurement at two or three actual chain lengths and instrument storage-task queue delay; run mutable ascending ranges at `D` in the thousands with batch sizes 1 and 1,000 and count storage fetches; empirically test route-local concurrency, body lifetime, and resource cost for several open-stream counts; and measure old-immutable-tip wallet backfill while observing the leadership loop. Apply the short-term recommendations in isolated scratch worktrees and repeat the relevant measurements. Record hardware, database/chain size, configuration, request parameters, storage queue delay, RSS, latency, block interval, and exact code revision. No scratch-fix result is available for any finding. Keep #794 open until the requested matrix and comparisons have been completed to a defensible level.
 
 ## Appendix A — Definitions
 
